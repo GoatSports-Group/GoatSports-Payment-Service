@@ -71,7 +71,7 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
 
         PaymentAttempt paymentAttempt = PaymentAttempt.builder()
                 .paymentId(payment.getPaymentId())
-                .provider(PaymentProvider.VNPAY)
+                .provider(PaymentProvider.MOMO)
                 .method(command.getMethod())
                 .status(PaymentAttemptStatus.CREATED)
                 .initiatedAt(now)
@@ -100,8 +100,8 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
             throw exception;
         } catch (RuntimeException exception) {
             PaymentProviderException providerException = new PaymentProviderException(
-                    "VNPAY_CHECKOUT_ERROR",
-                    "Không thể tạo URL thanh toán VNPAY",
+                    "MOMO_CHECKOUT_ERROR",
+                    "Không thể tạo URL thanh toán MoMo",
                     exception
             );
             markFailed(paymentAttempt, providerException.getCode(), providerException.getMessage());
@@ -131,22 +131,22 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
         if (command.getMethod() == null) {
             throw new InvalidPaymentException("PAYMENT_METHOD_REQUIRED", "Phương thức thanh toán là bắt buộc");
         }
-        if (command.getMethod() == PaymentMethod.CASH) {
+        if (command.getMethod() != PaymentMethod.E_WALLET) {
             throw new InvalidPaymentException(
                     "UNSUPPORTED_PAYMENT_METHOD",
-                    "VNPAY không hỗ trợ phương thức CASH"
+                    "Checkout MoMo chỉ hỗ trợ phương thức E_WALLET"
             );
         }
         if (command.getLocale() != null
                 && !command.getLocale().isBlank()
                 && !command.getLocale().equalsIgnoreCase("vn")
                 && !command.getLocale().equalsIgnoreCase("en")) {
-            throw new InvalidPaymentException("VNPAY_INVALID_LOCALE", "VNPAY chỉ hỗ trợ locale vn hoặc en");
+            throw new InvalidPaymentException("MOMO_INVALID_LOCALE", "MoMo chỉ hỗ trợ locale vn hoặc en");
         }
         if (command.getIpAddress() == null
                 || command.getIpAddress().isBlank()
                 || command.getIpAddress().length() > 45) {
-            throw new InvalidPaymentException("VNPAY_INVALID_IP_ADDRESS", "Địa chỉ IP thanh toán không hợp lệ");
+            throw new InvalidPaymentException("MOMO_INVALID_IP_ADDRESS", "Địa chỉ IP thanh toán không hợp lệ");
         }
     }
 
@@ -168,7 +168,7 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
             throw new PaymentConflictException("PAYMENT_EXPIRED", "Payment đã hết hạn");
         }
         if (!"VND".equals(payment.getCurrency())) {
-            throw new InvalidPaymentException("UNSUPPORTED_CURRENCY", "VNPAY hiện chỉ hỗ trợ VND");
+            throw new InvalidPaymentException("UNSUPPORTED_CURRENCY", "MoMo hiện chỉ hỗ trợ VND");
         }
     }
 

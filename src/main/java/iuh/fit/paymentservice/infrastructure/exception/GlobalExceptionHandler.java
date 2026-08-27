@@ -45,8 +45,8 @@ public class GlobalExceptionHandler {
     }
 
     private boolean isConfigurationError(PaymentProviderException exception) {
-        return "VNPAY_DISABLED".equals(exception.getCode())
-                || "VNPAY_CONFIGURATION_ERROR".equals(exception.getCode());
+        return "MOMO_DISABLED".equals(exception.getCode())
+                || "MOMO_CONFIGURATION_ERROR".equals(exception.getCode());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

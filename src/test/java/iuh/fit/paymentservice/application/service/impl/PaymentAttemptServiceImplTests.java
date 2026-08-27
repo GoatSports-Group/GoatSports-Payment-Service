@@ -60,7 +60,7 @@ class PaymentAttemptServiceImplTests {
         CreatePaymentAttemptCommand command = CreatePaymentAttemptCommand.builder()
                 .paymentId(paymentId)
                 .payerId(payerId)
-                .method(PaymentMethod.BANK_TRANSFER)
+                .method(PaymentMethod.E_WALLET)
                 .locale("vn")
                 .ipAddress("203.0.113.10")
                 .build();
@@ -76,20 +76,20 @@ class PaymentAttemptServiceImplTests {
             return attempt;
         });
         when(paymentCheckoutPort.createCheckoutUrl(any())).thenThrow(new PaymentProviderException(
-                "VNPAY_SIGNATURE_ERROR",
-                "Không thể ký yêu cầu thanh toán VNPAY"
+                "MOMO_SIGNATURE_ERROR",
+                "Không thể ký yêu cầu thanh toán MoMo"
         ));
 
         assertThatThrownBy(() -> paymentAttemptService.createPaymentAttempt(command))
                 .isInstanceOf(PaymentProviderException.class)
-                .hasMessage("Không thể ký yêu cầu thanh toán VNPAY");
+                .hasMessage("Không thể ký yêu cầu thanh toán MoMo");
 
         ArgumentCaptor<PaymentAttempt> attemptCaptor = ArgumentCaptor.forClass(PaymentAttempt.class);
         verify(paymentAttemptRepository, org.mockito.Mockito.times(2)).save(attemptCaptor.capture());
         PaymentAttempt failedAttempt = attemptCaptor.getAllValues().getLast();
         assertThat(failedAttempt.getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
-        assertThat(failedAttempt.getFailureCode()).isEqualTo("VNPAY_SIGNATURE_ERROR");
-        assertThat(failedAttempt.getFailureReason()).isEqualTo("Không thể ký yêu cầu thanh toán VNPAY");
+        assertThat(failedAttempt.getFailureCode()).isEqualTo("MOMO_SIGNATURE_ERROR");
+        assertThat(failedAttempt.getFailureReason()).isEqualTo("Không thể ký yêu cầu thanh toán MoMo");
         assertThat(failedAttempt.getCompletedAt()).isNotNull();
         verify(paymentRepository, never()).save(any());
     }

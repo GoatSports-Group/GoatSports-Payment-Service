@@ -13,18 +13,22 @@ import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.PaymentAttemptEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.PaymentEntity;
+import iuh.fit.paymentservice.application.port.client.PaymentCheckoutPort;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.context.annotation.Import;
 
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Modifier;
-import java.security.GeneralSecurityException;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -33,13 +37,11 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@Import(PaymentServiceApplicationTests.StubPaymentProviderConfiguration.class)
 class PaymentServiceApplicationTests {
     private static final String GATEWAY_SECRET = "test-gateway-secret";
     private static final Pattern PAYMENT_ID_PATTERN =
@@ -135,7 +137,7 @@ class PaymentServiceApplicationTests {
                 "CASH"
         );
         assertThat(Arrays.stream(PaymentProvider.values()).map(Enum::name)).containsExactly(
-                "VNPAY",
+                "MOMO",
                 "MANUAL"
         );
         assertThat(Arrays.stream(PaymentAttemptStatus.values()).map(Enum::name)).containsExactly(
@@ -311,7 +313,7 @@ class PaymentServiceApplicationTests {
     }
 
     @Test
-    void createVnPayCheckoutIsSignedPersistedAndReplaySafe() throws Exception {
+    void createMomoCheckoutIsPersistedAndReplaySafe() throws Exception {
         UUID payerUserId = UUID.randomUUID();
         TestHttpResponse paymentResponse = request(
                 "POST",
@@ -327,7 +329,7 @@ class PaymentServiceApplicationTests {
         headers.put("X-Forwarded-For", "203.0.113.10");
         String attemptBody = """
                 {
-                  "method": "BANK_TRANSFER",
+                  "method": "E_WALLET",
                   "locale": "vn"
                 }
                 """;
@@ -340,21 +342,21 @@ class PaymentServiceApplicationTests {
         );
         assertThat(created.status()).isEqualTo(201);
         JsonNode createdAttempt = responseData(created.body());
-        assertThat(createdAttempt.path("provider").asText()).isEqualTo("VNPAY");
-        assertThat(createdAttempt.path("method").asText()).isEqualTo("BANK_TRANSFER");
+        assertThat(createdAttempt.path("provider").asText()).isEqualTo("MOMO");
+        assertThat(createdAttempt.path("method").asText()).isEqualTo("E_WALLET");
         assertThat(createdAttempt.path("status").asText()).isEqualTo("REDIRECT_READY");
         assertThat(createdAttempt.path("providerTransactionId").isNull()).isTrue();
 
         String checkoutUrl = createdAttempt.path("checkoutUrl").asText();
-        assertValidVnPayCheckoutUrl(checkoutUrl, createdAttempt.path("attemptId").asText());
+        assertValidMomoCheckoutUrl(checkoutUrl, createdAttempt.path("attemptId").asText());
 
         Map<String, Object> persisted = jdbcTemplate.queryForMap(
                 "select provider, method, status, checkout_url, failure_code, failure_reason " +
                         "from payment_attempts where attempt_id = ?",
                 UUID.fromString(createdAttempt.path("attemptId").asText())
         );
-        assertThat(persisted).containsEntry("PROVIDER", "VNPAY");
-        assertThat(persisted).containsEntry("METHOD", "BANK_TRANSFER");
+        assertThat(persisted).containsEntry("PROVIDER", "MOMO");
+        assertThat(persisted).containsEntry("METHOD", "E_WALLET");
         assertThat(persisted).containsEntry("STATUS", "REDIRECT_READY");
         assertThat(persisted.get("CHECKOUT_URL")).isEqualTo(checkoutUrl);
         assertThat(persisted.get("FAILURE_CODE")).isNull();
@@ -379,7 +381,7 @@ class PaymentServiceApplicationTests {
     }
 
     @Test
-    void checkoutEnforcesOwnershipAndRejectsCash() throws Exception {
+    void checkoutEnforcesOwnershipAndRejectsUnsupportedMethods() throws Exception {
         UUID payerUserId = UUID.randomUUID();
         TestHttpResponse paymentResponse = request(
                 "POST",
@@ -406,6 +408,15 @@ class PaymentServiceApplicationTests {
         );
         assertThat(cash.status()).isEqualTo(400);
         assertThat(cash.body()).contains("\"code\":\"UNSUPPORTED_PAYMENT_METHOD\"");
+
+        TestHttpResponse bankTransfer = request(
+                "POST",
+                "/api/v1/payments/" + paymentId + "/attempts",
+                gatewayHeaders(payerUserId, null),
+                "{\"method\":\"BANK_TRANSFER\",\"locale\":\"vn\"}"
+        );
+        assertThat(bankTransfer.status()).isEqualTo(400);
+        assertThat(bankTransfer.body()).contains("\"code\":\"UNSUPPORTED_PAYMENT_METHOD\"");
     }
 
     private Map<String, String> gatewayHeaders(UUID userId, String idempotencyKey) {
@@ -446,34 +457,11 @@ class PaymentServiceApplicationTests {
         return objectMapper.readTree(body).path("data");
     }
 
-    private void assertValidVnPayCheckoutUrl(String checkoutUrl, String attemptId) throws Exception {
+    private void assertValidMomoCheckoutUrl(String checkoutUrl, String attemptId) {
         URI uri = URI.create(checkoutUrl);
         assertThat(uri.getScheme()).isEqualTo("https");
-        assertThat(uri.getHost()).isEqualTo("sandbox.vnpayment.vn");
-
-        String rawQuery = uri.getRawQuery();
-        int signatureIndex = rawQuery.lastIndexOf("&vnp_SecureHash=");
-        assertThat(signatureIndex).isPositive();
-        String canonicalQuery = rawQuery.substring(0, signatureIndex);
-        String signature = rawQuery.substring(signatureIndex + "&vnp_SecureHash=".length());
-
-        assertThat(canonicalQuery).contains(
-                "vnp_Amount=15000000",
-                "vnp_BankCode=VNBANK",
-                "vnp_CurrCode=VND",
-                "vnp_IpAddr=203.0.113.10",
-                "vnp_Locale=vn",
-                "vnp_TmnCode=TESTCODE",
-                "vnp_TxnRef=" + attemptId.replace("-", ""),
-                "vnp_Version=2.1.0"
-        );
-        assertThat(signature).isEqualTo(hmacSha512("test-vnpay-hash-secret", canonicalQuery));
-    }
-
-    private String hmacSha512(String secret, String data) throws GeneralSecurityException {
-        Mac mac = Mac.getInstance("HmacSHA512");
-        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA512"));
-        return java.util.HexFormat.of().formatHex(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
+        assertThat(uri.getHost()).isEqualTo("test-payment.momo.vn");
+        assertThat(uri.getRawQuery()).isEqualTo("orderId=" + attemptId.replace("-", ""));
     }
 
     private Map<String, Class<?>> declaredFields(Class<?> type) {
@@ -514,5 +502,15 @@ class PaymentServiceApplicationTests {
     }
 
     private record TestHttpResponse(int status, String body) {
+    }
+
+    @TestConfiguration
+    static class StubPaymentProviderConfiguration {
+        @Bean
+        @Primary
+        PaymentCheckoutPort paymentCheckoutPort() {
+            return command -> "https://test-payment.momo.vn/v2/gateway/pay?orderId="
+                    + command.getAttemptId().toString().replace("-", "");
+        }
     }
 }
