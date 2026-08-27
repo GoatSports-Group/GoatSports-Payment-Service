@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd"
+        logicalFilePath="db/changelog/db.changelog-master.xml"
+>
+    <changeSet id="20260827-0002-create-payments" author="goatsports">
+        <createTable tableName="payments">
+            <column name="payment_id" type="UUID">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_payments"/>
+            </column>
+            <column name="payer_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="purpose" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reference_type" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reference_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amount" type="DOUBLE PRECISION">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR(500)"/>
+            <column name="idempotency_key" type="VARCHAR(128)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_payments_idempotency_key"/>
+            </column>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="paid_at" type="TIMESTAMP"/>
+            <column name="expires_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+                tableName="payments"
+                columnNames="reference_type, reference_id, purpose"
+                constraintName="uq_payments_reference_purpose"/>
+
+        <createIndex tableName="payments" indexName="idx_payments_payer_created_at">
+            <column name="payer_id"/>
+            <column name="created_at" descending="true"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE payments
+                ADD CONSTRAINT chk_payments_amount_positive CHECK (amount &gt; 0);
+            ALTER TABLE payments
+                ADD CONSTRAINT chk_payments_currency CHECK (currency = 'VND');
+        </sql>
+    </changeSet>
+</databaseChangeLog>
