@@ -1,6 +1,6 @@
 package iuh.fit.paymentservice.application.mapper;
 
-import iuh.fit.paymentservice.application.dto.response.PaymentResponseCommand;
+import iuh.fit.paymentservice.application.dto.response.payment.PaymentResponseCommand;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import org.mapstruct.Mapper;
 

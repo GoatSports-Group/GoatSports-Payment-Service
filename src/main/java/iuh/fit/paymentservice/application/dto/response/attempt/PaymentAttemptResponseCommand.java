@@ -1,4 +1,4 @@
-package iuh.fit.paymentservice.application.dto.response;
+package iuh.fit.paymentservice.application.dto.response.attempt;
 
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
 import iuh.fit.paymentservice.domain.enums.PaymentMethod;

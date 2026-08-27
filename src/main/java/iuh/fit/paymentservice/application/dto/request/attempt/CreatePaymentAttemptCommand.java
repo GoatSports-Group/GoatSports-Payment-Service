@@ -1,4 +1,4 @@
-package iuh.fit.paymentservice.application.dto.request;
+package iuh.fit.paymentservice.application.dto.request.attempt;
 
 import iuh.fit.paymentservice.domain.enums.PaymentMethod;
 import lombok.AllArgsConstructor;

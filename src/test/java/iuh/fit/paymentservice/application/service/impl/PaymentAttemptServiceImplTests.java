@@ -1,6 +1,6 @@
 package iuh.fit.paymentservice.application.service.impl;
 
-import iuh.fit.paymentservice.application.dto.request.CreatePaymentAttemptCommand;
+import iuh.fit.paymentservice.application.dto.request.attempt.CreatePaymentAttemptCommand;
 import iuh.fit.paymentservice.application.exception.PaymentProviderException;
 import iuh.fit.paymentservice.application.mapper.PaymentAttemptMapper;
 import iuh.fit.paymentservice.application.port.client.PaymentCheckoutPort;

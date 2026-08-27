@@ -1,7 +1,7 @@
 package iuh.fit.paymentservice.infrastructure.external.adapter;
 
-import iuh.fit.paymentservice.application.dto.request.ProviderTransactionQueryCommand;
-import iuh.fit.paymentservice.application.dto.response.ProviderTransactionStatus;
+import iuh.fit.paymentservice.application.dto.request.webhook.ProviderTransactionQueryCommand;
+import iuh.fit.paymentservice.application.dto.response.webhook.ProviderTransactionStatus;
 import iuh.fit.paymentservice.application.exception.PaymentProviderException;
 import iuh.fit.paymentservice.application.port.client.ProviderTransactionQueryPort;
 import iuh.fit.paymentservice.infrastructure.external.config.MomoProperties;

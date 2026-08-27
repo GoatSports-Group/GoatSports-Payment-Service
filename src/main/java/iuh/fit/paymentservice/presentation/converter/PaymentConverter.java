@@ -1,7 +1,7 @@
 package iuh.fit.paymentservice.presentation.converter;
 
-import iuh.fit.paymentservice.application.dto.request.CreatePaymentCommand;
-import iuh.fit.paymentservice.application.dto.response.PaymentResponseCommand;
+import iuh.fit.paymentservice.application.dto.request.payment.CreatePaymentCommand;
+import iuh.fit.paymentservice.application.dto.response.payment.PaymentResponseCommand;
 import iuh.fit.paymentservice.presentation.request.CreatePaymentRequest;
 import iuh.fit.paymentservice.presentation.response.PaymentResponse;
 import org.springframework.stereotype.Component;

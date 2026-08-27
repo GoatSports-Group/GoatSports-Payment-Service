@@ -1,8 +1,8 @@
 package iuh.fit.paymentservice.application.service.impl;
 
-import iuh.fit.paymentservice.application.dto.request.CreatePaymentCommand;
-import iuh.fit.paymentservice.application.dto.response.CreatePaymentResult;
-import iuh.fit.paymentservice.application.dto.response.PaymentResponseCommand;
+import iuh.fit.paymentservice.application.dto.request.payment.CreatePaymentCommand;
+import iuh.fit.paymentservice.application.dto.response.payment.CreatePaymentResult;
+import iuh.fit.paymentservice.application.dto.response.payment.PaymentResponseCommand;
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.exception.PaymentAccessDeniedException;
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;

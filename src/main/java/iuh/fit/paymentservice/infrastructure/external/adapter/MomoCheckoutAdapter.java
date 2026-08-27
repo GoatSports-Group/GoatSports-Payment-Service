@@ -1,6 +1,6 @@
 package iuh.fit.paymentservice.infrastructure.external.adapter;
 
-import iuh.fit.paymentservice.application.dto.request.ProviderCheckoutCommand;
+import iuh.fit.paymentservice.application.dto.request.webhook.ProviderCheckoutCommand;
 import iuh.fit.paymentservice.application.exception.PaymentProviderException;
 import iuh.fit.paymentservice.application.port.client.PaymentCheckoutPort;
 import iuh.fit.paymentservice.domain.enums.PaymentMethod;

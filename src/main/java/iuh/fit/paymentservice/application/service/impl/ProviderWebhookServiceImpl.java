@@ -1,7 +1,7 @@
 package iuh.fit.paymentservice.application.service.impl;
 
-import iuh.fit.paymentservice.application.dto.request.MomoWebhookCommand;
-import iuh.fit.paymentservice.application.dto.request.ProviderPaymentResultCommand;
+import iuh.fit.paymentservice.application.dto.request.webhook.MomoWebhookCommand;
+import iuh.fit.paymentservice.application.dto.request.payment.ProviderPaymentResultCommand;
 import iuh.fit.paymentservice.application.exception.PaymentProviderException;
 import iuh.fit.paymentservice.application.port.client.MomoWebhookVerificationPort;
 import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;

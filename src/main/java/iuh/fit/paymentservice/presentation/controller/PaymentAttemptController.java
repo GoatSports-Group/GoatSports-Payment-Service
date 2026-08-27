@@ -1,6 +1,6 @@
 package iuh.fit.paymentservice.presentation.controller;
 
-import iuh.fit.paymentservice.application.dto.response.CreatePaymentAttemptResult;
+import iuh.fit.paymentservice.application.dto.response.attempt.CreatePaymentAttemptResult;
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.port.security.CurrentUserProvider;
 import iuh.fit.paymentservice.application.service.PaymentAttemptService;

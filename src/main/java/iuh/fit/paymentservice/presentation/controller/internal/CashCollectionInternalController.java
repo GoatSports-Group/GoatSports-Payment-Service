@@ -1,7 +1,7 @@
 package iuh.fit.paymentservice.presentation.controller.internal;
 
-import iuh.fit.paymentservice.application.dto.request.CollectCashPaymentCommand;
-import iuh.fit.paymentservice.application.dto.response.CreatePaymentAttemptResult;
+import iuh.fit.paymentservice.application.dto.request.payment.CollectCashPaymentCommand;
+import iuh.fit.paymentservice.application.dto.response.attempt.CreatePaymentAttemptResult;
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.port.security.CurrentUserProvider;
 import iuh.fit.paymentservice.application.service.CashCollectionService;

@@ -1,8 +1,8 @@
 package iuh.fit.paymentservice.application.service.impl;
 
-import iuh.fit.paymentservice.application.dto.request.ProviderPaymentResultCommand;
-import iuh.fit.paymentservice.application.dto.request.ProviderTransactionQueryCommand;
-import iuh.fit.paymentservice.application.dto.response.ProviderTransactionStatus;
+import iuh.fit.paymentservice.application.dto.request.payment.ProviderPaymentResultCommand;
+import iuh.fit.paymentservice.application.dto.request.webhook.ProviderTransactionQueryCommand;
+import iuh.fit.paymentservice.application.dto.response.webhook.ProviderTransactionStatus;
 import iuh.fit.paymentservice.application.port.client.ProviderTransactionQueryPort;
 import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;

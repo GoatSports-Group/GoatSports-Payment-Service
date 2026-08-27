@@ -1,6 +1,6 @@
 package iuh.fit.paymentservice.infrastructure.external.adapter;
 
-import iuh.fit.paymentservice.application.dto.request.MomoWebhookCommand;
+import iuh.fit.paymentservice.application.dto.request.webhook.MomoWebhookCommand;
 import iuh.fit.paymentservice.application.port.client.MomoWebhookVerificationPort;
 import iuh.fit.paymentservice.infrastructure.external.config.MomoProperties;
 import lombok.RequiredArgsConstructor;

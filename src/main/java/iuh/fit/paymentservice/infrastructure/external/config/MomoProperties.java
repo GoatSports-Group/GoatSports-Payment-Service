@@ -17,6 +17,8 @@ public class MomoProperties {
     private boolean enabled;
     private String apiUrl;
     private String queryUrl;
+    private String refundUrl;
+    private String refundQueryUrl;
     private String redirectUrl;
     private String ipnUrl;
     private String partnerCode;
@@ -46,6 +48,12 @@ public class MomoProperties {
         }
         if (isBlank(queryUrl) || !hasScheme(queryUrl, "https")) {
             throw configurationError("MOMO_QUERY_URL phải là HTTPS URL do MoMo cung cấp");
+        }
+        if (isBlank(refundUrl) || !hasScheme(refundUrl, "https")) {
+            throw configurationError("MOMO_REFUND_URL phải là HTTPS URL do MoMo cung cấp");
+        }
+        if (isBlank(refundQueryUrl) || !hasScheme(refundQueryUrl, "https")) {
+            throw configurationError("MOMO_REFUND_QUERY_URL phải là HTTPS URL do MoMo cung cấp");
         }
         if (isBlank(redirectUrl) || !hasHttpScheme(redirectUrl)) {
             throw configurationError("MOMO_REDIRECT_URL phải là HTTP(S) URL hợp lệ");

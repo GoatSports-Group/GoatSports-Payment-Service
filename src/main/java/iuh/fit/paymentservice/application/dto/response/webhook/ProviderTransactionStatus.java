@@ -1,4 +1,4 @@
-package iuh.fit.paymentservice.application.dto.response;
+package iuh.fit.paymentservice.application.dto.response.webhook;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

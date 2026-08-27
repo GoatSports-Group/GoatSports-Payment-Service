@@ -1,6 +1,6 @@
 package iuh.fit.paymentservice.application.service.impl;
 
-import iuh.fit.paymentservice.application.dto.request.ProviderPaymentResultCommand;
+import iuh.fit.paymentservice.application.dto.request.payment.ProviderPaymentResultCommand;
 import iuh.fit.paymentservice.application.exception.PaymentProviderException;
 import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd"
+        logicalFilePath="db/changelog/db.changelog-master.xml"
+>
+    <changeSet id="20260827-0005-create-refunds" author="goatsports">
+        <createTable tableName="refunds">
+            <column name="refund_id" type="UUID">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_refunds"/>
+            </column>
+            <column name="payment_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_refunds_payment"
+                             referencedTableName="payments"
+                             referencedColumnNames="payment_id"/>
+            </column>
+            <column name="requested_by" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amount" type="DOUBLE PRECISION">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_refund_id" type="VARCHAR(100)"/>
+            <column name="idempotency_key" type="VARCHAR(128)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_refunds_idempotency_key"/>
+            </column>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failure_reason" type="VARCHAR(500)"/>
+            <column name="refunded_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+                tableName="refunds"
+                columnNames="provider_refund_id"
+                constraintName="uq_refunds_provider_refund_id"/>
+
+        <createIndex tableName="refunds" indexName="idx_refunds_payment_created_at">
+            <column name="payment_id"/>
+            <column name="created_at" descending="true"/>
+        </createIndex>
+
+        <createIndex tableName="refunds" indexName="idx_refunds_status_updated_at">
+            <column name="status"/>
+            <column name="updated_at"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE refunds
+                ADD CONSTRAINT chk_refunds_amount_positive CHECK (amount &gt; 0);
+        </sql>
+    </changeSet>
+</databaseChangeLog>

@@ -1,7 +1,8 @@
-package iuh.fit.paymentservice.application.dto.request;
+package iuh.fit.paymentservice.application.dto.response.payment;
 
 import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
 import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
+import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,14 +17,21 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreatePaymentCommand {
+public class PaymentResponseCommand {
+    private UUID paymentId;
     private UUID payerId;
+    private PaymentPurpose purpose;
     private PaymentReferenceType referenceType;
     private UUID referenceId;
-    private PaymentPurpose purpose;
     private Double amount;
     private String currency;
     private String description;
     private String idempotencyKey;
+    private PaymentStatus status;
+    private LocalDateTime paidAt;
     private LocalDateTime expiresAt;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private String createdBy;
+    private String updatedBy;
 }

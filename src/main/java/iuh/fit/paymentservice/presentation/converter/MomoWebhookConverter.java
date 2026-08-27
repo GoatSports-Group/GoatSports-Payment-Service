@@ -1,6 +1,6 @@
 package iuh.fit.paymentservice.presentation.converter;
 
-import iuh.fit.paymentservice.application.dto.request.MomoWebhookCommand;
+import iuh.fit.paymentservice.application.dto.request.webhook.MomoWebhookCommand;
 import iuh.fit.paymentservice.presentation.request.MomoWebhookRequest;
 import org.springframework.stereotype.Component;
 
