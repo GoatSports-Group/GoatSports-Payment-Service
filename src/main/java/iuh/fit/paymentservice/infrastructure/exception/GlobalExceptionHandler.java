@@ -1,11 +1,11 @@
 package iuh.fit.paymentservice.infrastructure.exception;
 
+import iuh.fit.paymentservice.application.dto.response.base.ApiErrorResponse;
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.exception.PaymentAccessDeniedException;
 import iuh.fit.paymentservice.application.exception.PaymentApplicationException;
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.exception.PaymentNotFoundException;
-import iuh.fit.paymentservice.presentation.response.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

@@ -1,4 +1,4 @@
-package iuh.fit.paymentservice.presentation.response;
+package iuh.fit.paymentservice.application.dto.response.base;
 
 import java.util.Map;
 
