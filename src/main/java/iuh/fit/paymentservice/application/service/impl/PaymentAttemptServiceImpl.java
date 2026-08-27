@@ -158,7 +158,9 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
         if (!payment.getPayerId().equals(command.getPayerId())) {
             throw new PaymentAccessDeniedException();
         }
-        if (payment.getStatus() != PaymentStatus.CREATED && payment.getStatus() != PaymentStatus.PENDING) {
+        if (payment.getStatus() != PaymentStatus.CREATED
+                && payment.getStatus() != PaymentStatus.PENDING
+                && payment.getStatus() != PaymentStatus.FAILED) {
             throw new PaymentConflictException(
                     "PAYMENT_NOT_PAYABLE",
                     "Trạng thái payment hiện tại không cho phép tạo checkout"

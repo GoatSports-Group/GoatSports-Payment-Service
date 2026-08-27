@@ -16,6 +16,7 @@ import java.net.URI;
 public class MomoProperties {
     private boolean enabled;
     private String apiUrl;
+    private String queryUrl;
     private String redirectUrl;
     private String ipnUrl;
     private String partnerCode;
@@ -25,14 +26,26 @@ public class MomoProperties {
     private String storeId = "GoatSports";
     private String requestType = "captureWallet";
     private int timeoutSeconds = 30;
+    private boolean reconciliationEnabled;
+    private long reconciliationIntervalMs = 60_000;
+    private int reconciliationMinAgeSeconds = 60;
+    private int reconciliationBatchSize = 50;
 
     @PostConstruct
     void validateWhenEnabled() {
         if (!enabled) {
+            if (reconciliationEnabled) {
+                throw configurationError(
+                        "MOMO_RECONCILIATION_ENABLED không thể bật khi MOMO_ENABLED=false"
+                );
+            }
             return;
         }
         if (isBlank(apiUrl) || !hasScheme(apiUrl, "https")) {
             throw configurationError("MOMO_API_URL phải là HTTPS URL do MoMo cung cấp");
+        }
+        if (isBlank(queryUrl) || !hasScheme(queryUrl, "https")) {
+            throw configurationError("MOMO_QUERY_URL phải là HTTPS URL do MoMo cung cấp");
         }
         if (isBlank(redirectUrl) || !hasHttpScheme(redirectUrl)) {
             throw configurationError("MOMO_REDIRECT_URL phải là HTTP(S) URL hợp lệ");
@@ -60,6 +73,15 @@ public class MomoProperties {
         }
         if (timeoutSeconds < 30 || timeoutSeconds > 120) {
             throw configurationError("MOMO_TIMEOUT_SECONDS phải nằm trong khoảng 30-120 giây");
+        }
+        if (reconciliationIntervalMs < 10_000) {
+            throw configurationError("MOMO_RECONCILIATION_INTERVAL_MS phải từ 10000 trở lên");
+        }
+        if (reconciliationMinAgeSeconds < 1 || reconciliationMinAgeSeconds > 86_400) {
+            throw configurationError("MOMO_RECONCILIATION_MIN_AGE_SECONDS phải nằm trong khoảng 1-86400");
+        }
+        if (reconciliationBatchSize < 1 || reconciliationBatchSize > 500) {
+            throw configurationError("MOMO_RECONCILIATION_BATCH_SIZE phải nằm trong khoảng 1-500");
         }
     }
 

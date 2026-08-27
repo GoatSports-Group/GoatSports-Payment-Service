@@ -7,4 +7,5 @@
 >
     <include file="/db/changelog/schema/27-08-2026/init-payment-schema.xml"/>
     <include file="/db/changelog/schema/27-08-2026/create-payment-attempt-schema.xml"/>
+    <include file="/db/changelog/schema/27-08-2026/create-provider-webhook-event-schema.xml"/>
 </databaseChangeLog>

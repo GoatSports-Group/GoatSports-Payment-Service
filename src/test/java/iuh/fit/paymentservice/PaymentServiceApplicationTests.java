@@ -5,14 +5,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import iuh.fit.paymentservice.domain.entity.BaseEntity;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
+import iuh.fit.paymentservice.domain.entity.ProviderWebhookEvent;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
 import iuh.fit.paymentservice.domain.enums.PaymentMethod;
 import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
 import iuh.fit.paymentservice.domain.enums.PaymentProvider;
 import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
+import iuh.fit.paymentservice.domain.enums.WebhookProcessingStatus;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.PaymentAttemptEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.PaymentEntity;
+import iuh.fit.paymentservice.infrastructure.persistence.entity.ProviderWebhookEventEntity;
 import iuh.fit.paymentservice.application.port.client.PaymentCheckoutPort;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -28,12 +31,15 @@ import org.springframework.context.annotation.Import;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.lang.reflect.Modifier;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.HexFormat;
 import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 
@@ -63,7 +69,7 @@ class PaymentServiceApplicationTests {
                 Integer.class
         );
 
-        assertThat(changeCount).isEqualTo(2);
+        assertThat(changeCount).isEqualTo(3);
 
         List<String> paymentColumns = jdbcTemplate.queryForList(
                 "select column_name from information_schema.columns " +
@@ -110,6 +116,54 @@ class PaymentServiceApplicationTests {
                 "updated_at",
                 "created_by",
                 "updated_by"
+        );
+
+        List<String> webhookColumns = jdbcTemplate.queryForList(
+                "select column_name from information_schema.columns " +
+                        "where table_schema = 'public' and table_name = 'provider_webhook_events'",
+                String.class
+        );
+        assertThat(webhookColumns).containsExactlyInAnyOrder(
+                "webhook_event_id",
+                "attempt_id",
+                "provider",
+                "provider_event_id",
+                "payload_hash",
+                "signature_valid",
+                "status",
+                "received_at",
+                "processed_at",
+                "failure_reason",
+                "created_at",
+                "updated_at",
+                "created_by",
+                "updated_by"
+        );
+    }
+
+    @Test
+    void providerWebhookEventDomainMatchesClassDiagramExactly() {
+        assertThat(declaredFields(ProviderWebhookEvent.class)).containsExactlyInAnyOrderEntriesOf(
+                Map.ofEntries(
+                        Map.entry("webhookEventId", UUID.class),
+                        Map.entry("attemptId", UUID.class),
+                        Map.entry("provider", PaymentProvider.class),
+                        Map.entry("providerEventId", String.class),
+                        Map.entry("payloadHash", String.class),
+                        Map.entry("signatureValid", Boolean.class),
+                        Map.entry("status", WebhookProcessingStatus.class),
+                        Map.entry("receivedAt", LocalDateTime.class),
+                        Map.entry("processedAt", LocalDateTime.class),
+                        Map.entry("failureReason", String.class)
+                )
+        );
+        assertThat(declaredFields(ProviderWebhookEventEntity.class))
+                .containsExactlyInAnyOrderEntriesOf(declaredFields(ProviderWebhookEvent.class));
+        assertThat(Arrays.stream(WebhookProcessingStatus.values()).map(Enum::name)).containsExactly(
+                "RECEIVED",
+                "PROCESSED",
+                "IGNORED",
+                "FAILED"
         );
     }
 
@@ -419,6 +473,122 @@ class PaymentServiceApplicationTests {
         assertThat(bankTransfer.body()).contains("\"code\":\"UNSUPPORTED_PAYMENT_METHOD\"");
     }
 
+    @Test
+    void momoWebhookIsVerifiedIdempotentAndSafeForOutOfOrderEvents() throws Exception {
+        UUID payerUserId = UUID.randomUUID();
+        TestHttpResponse paymentResponse = request(
+                "POST",
+                "/api/v1/payments",
+                gatewayHeaders(payerUserId, "pay-test-" + UUID.randomUUID()),
+                paymentBody("BOOKING", UUID.randomUUID(), "BOOKING_DEPOSIT", "150000", "VND")
+        );
+        UUID paymentId = extractPaymentId(paymentResponse.body());
+        TestHttpResponse attemptResponse = request(
+                "POST",
+                "/api/v1/payments/" + paymentId + "/attempts",
+                gatewayHeaders(payerUserId, null),
+                "{\"method\":\"E_WALLET\",\"locale\":\"vn\"}"
+        );
+        assertThat(attemptResponse.status()).isEqualTo(201);
+        JsonNode attempt = responseData(attemptResponse.body());
+        UUID attemptId = UUID.fromString(attempt.path("attemptId").asText());
+        long responseTime = System.currentTimeMillis();
+        long transId = 270820260001L;
+
+        String successBody = momoWebhookBody(
+                paymentId,
+                attemptId,
+                transId,
+                0,
+                "Successful.",
+                responseTime,
+                null
+        );
+        TestHttpResponse success = request(
+                "POST",
+                "/api/v1/payments/providers/momo/webhook",
+                Map.of(),
+                successBody
+        );
+        assertThat(success.status()).isEqualTo(204);
+        assertThat(jdbcTemplate.queryForObject(
+                "select status from payments where payment_id = ?",
+                String.class,
+                paymentId
+        )).isEqualTo("SUCCEEDED");
+        Map<String, Object> persistedAttempt = jdbcTemplate.queryForMap(
+                "select status, provider_transaction_id from payment_attempts where attempt_id = ?",
+                attemptId
+        );
+        assertThat(persistedAttempt).containsEntry("STATUS", "SUCCEEDED");
+        assertThat(persistedAttempt).containsEntry("PROVIDER_TRANSACTION_ID", Long.toString(transId));
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from provider_webhook_events where attempt_id = ? and status = 'PROCESSED'",
+                Integer.class,
+                attemptId
+        )).isEqualTo(1);
+
+        TestHttpResponse duplicate = request(
+                "POST",
+                "/api/v1/payments/providers/momo/webhook",
+                Map.of(),
+                successBody
+        );
+        assertThat(duplicate.status()).isEqualTo(204);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from provider_webhook_events where attempt_id = ?",
+                Integer.class,
+                attemptId
+        )).isEqualTo(1);
+
+        String lateFailureBody = momoWebhookBody(
+                paymentId,
+                attemptId,
+                transId,
+                1006,
+                "User denied payment.",
+                responseTime + 1,
+                null
+        );
+        assertThat(request(
+                "POST",
+                "/api/v1/payments/providers/momo/webhook",
+                Map.of(),
+                lateFailureBody
+        ).status()).isEqualTo(204);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from provider_webhook_events where attempt_id = ? and status = 'IGNORED'",
+                Integer.class,
+                attemptId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "select status from payments where payment_id = ?",
+                String.class,
+                paymentId
+        )).isEqualTo("SUCCEEDED");
+
+        String forgedBody = momoWebhookBody(
+                paymentId,
+                attemptId,
+                transId + 1,
+                0,
+                "Successful.",
+                responseTime + 2,
+                "0".repeat(64)
+        );
+        assertThat(request(
+                "POST",
+                "/api/v1/payments/providers/momo/webhook",
+                Map.of(),
+                forgedBody
+        ).status()).isEqualTo(204);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from provider_webhook_events " +
+                        "where signature_valid = false and status = 'FAILED' and attempt_id is null",
+                Integer.class
+        )).isGreaterThanOrEqualTo(1);
+    }
+
     private Map<String, String> gatewayHeaders(UUID userId, String idempotencyKey) {
         var headers = new java.util.LinkedHashMap<String, String>();
         headers.put("X-Gateway-Secret", GATEWAY_SECRET);
@@ -445,6 +615,56 @@ class PaymentServiceApplicationTests {
                   "currency": "%s"
                 }
                 """.formatted(referenceType, referenceId, purpose, amount, currency);
+    }
+
+    private String momoWebhookBody(
+            UUID paymentId,
+            UUID attemptId,
+            long transId,
+            int resultCode,
+            String message,
+            long responseTime,
+            String signatureOverride
+    ) throws Exception {
+        String reference = attemptId.toString().replace("-", "");
+        String orderInfo = "GoatSports payment " + paymentId.toString().replace("-", "");
+        String rawSignature = "accessKey=test-momo-access-key"
+                + "&amount=150000"
+                + "&extraData="
+                + "&message=" + message
+                + "&orderId=" + reference
+                + "&orderInfo=" + orderInfo
+                + "&orderType=momo_wallet"
+                + "&partnerCode=MOMO_TEST"
+                + "&payType=qr"
+                + "&requestId=" + reference
+                + "&responseTime=" + responseTime
+                + "&resultCode=" + resultCode
+                + "&transId=" + transId;
+        String signature = signatureOverride == null
+                ? hmacSha256("test-momo-secret-key", rawSignature)
+                : signatureOverride;
+        return objectMapper.writeValueAsString(Map.ofEntries(
+                Map.entry("partnerCode", "MOMO_TEST"),
+                Map.entry("orderId", reference),
+                Map.entry("requestId", reference),
+                Map.entry("amount", 150000L),
+                Map.entry("orderInfo", orderInfo),
+                Map.entry("orderType", "momo_wallet"),
+                Map.entry("transId", transId),
+                Map.entry("resultCode", resultCode),
+                Map.entry("message", message),
+                Map.entry("payType", "qr"),
+                Map.entry("responseTime", responseTime),
+                Map.entry("extraData", ""),
+                Map.entry("signature", signature)
+        ));
+    }
+
+    private String hmacSha256(String secret, String data) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        return HexFormat.of().formatHex(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
     }
 
     private UUID extractPaymentId(String body) {

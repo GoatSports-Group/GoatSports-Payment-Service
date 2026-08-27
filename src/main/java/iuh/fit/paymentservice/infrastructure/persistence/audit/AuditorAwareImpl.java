@@ -16,6 +16,6 @@ public class AuditorAwareImpl implements AuditorAware<String> {
     @Override
     @NonNull
     public Optional<String> getCurrentAuditor() {
-        return securityContextHelper.getCurrentUserId();
+        return securityContextHelper.getCurrentUserId().or(() -> Optional.of("system"));
     }
 }
