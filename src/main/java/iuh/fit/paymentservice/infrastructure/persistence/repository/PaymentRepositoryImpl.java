@@ -31,6 +31,11 @@ public class PaymentRepositoryImpl implements PaymentRepository {
     }
 
     @Override
+    public Optional<Payment> findByIdForUpdate(UUID paymentId) {
+        return jpaPaymentRepository.findByIdForUpdate(paymentId).map(paymentEntityMapper::toDomain);
+    }
+
+    @Override
     public Optional<Payment> findByIdempotencyKey(String idempotencyKey) {
         return jpaPaymentRepository.findByIdempotencyKey(idempotencyKey)
                 .map(paymentEntityMapper::toDomain);

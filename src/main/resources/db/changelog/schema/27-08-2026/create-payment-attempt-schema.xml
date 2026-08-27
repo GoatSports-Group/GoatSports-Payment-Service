@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd"
+        logicalFilePath="db/changelog/db.changelog-master.xml"
+>
+    <changeSet id="20260827-0003-create-payment-attempts" author="goatsports">
+        <createTable tableName="payment_attempts">
+            <column name="attempt_id" type="UUID">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_payment_attempts"/>
+            </column>
+            <column name="payment_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_payment_attempts_payment"
+                             referencedTableName="payments"
+                             referencedColumnNames="payment_id"/>
+            </column>
+            <column name="provider" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="method" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_transaction_id" type="VARCHAR(100)"/>
+            <column name="checkout_url" type="TEXT"/>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failure_code" type="VARCHAR(64)"/>
+            <column name="failure_reason" type="VARCHAR(500)"/>
+            <column name="initiated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="completed_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+                tableName="payment_attempts"
+                columnNames="provider, provider_transaction_id"
+                constraintName="uq_payment_attempts_provider_transaction"/>
+
+        <createIndex tableName="payment_attempts" indexName="idx_payment_attempts_payment_created_at">
+            <column name="payment_id"/>
+            <column name="created_at" descending="true"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

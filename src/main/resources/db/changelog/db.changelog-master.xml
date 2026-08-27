@@ -6,4 +6,5 @@
                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd"
 >
     <include file="/db/changelog/schema/27-08-2026/init-payment-schema.xml"/>
+    <include file="/db/changelog/schema/27-08-2026/create-payment-attempt-schema.xml"/>
 </databaseChangeLog>

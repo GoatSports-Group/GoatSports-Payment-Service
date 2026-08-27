@@ -11,4 +11,9 @@ public class PaymentApplicationException extends RuntimeException {
         this.code = code;
     }
 
+    public PaymentApplicationException(String code, String message, Throwable cause) {
+        super(message, cause);
+        this.code = code;
+    }
+
 }

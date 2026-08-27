@@ -6,6 +6,7 @@ import iuh.fit.paymentservice.application.exception.PaymentAccessDeniedException
 import iuh.fit.paymentservice.application.exception.PaymentApplicationException;
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.exception.PaymentNotFoundException;
+import iuh.fit.paymentservice.application.exception.PaymentProviderException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,12 +32,21 @@ public class GlobalExceptionHandler {
             case PaymentNotFoundException paymentNotFoundException -> HttpStatus.NOT_FOUND;
             case PaymentAccessDeniedException paymentAccessDeniedException -> HttpStatus.FORBIDDEN;
             case PaymentConflictException paymentConflictException -> HttpStatus.CONFLICT;
+            case PaymentProviderException paymentProviderException ->
+                    isConfigurationError(paymentProviderException)
+                            ? HttpStatus.SERVICE_UNAVAILABLE
+                            : HttpStatus.BAD_GATEWAY;
             case InvalidPaymentException invalidPaymentException -> HttpStatus.BAD_REQUEST;
             case null, default -> HttpStatus.BAD_REQUEST;
         };
 
         assert exception != null;
         return error(status, exception.getCode(), exception.getMessage(), Map.of(), request);
+    }
+
+    private boolean isConfigurationError(PaymentProviderException exception) {
+        return "VNPAY_DISABLED".equals(exception.getCode())
+                || "VNPAY_CONFIGURATION_ERROR".equals(exception.getCode());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
