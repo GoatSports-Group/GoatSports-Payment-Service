@@ -40,6 +40,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.HexFormat;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 
@@ -321,6 +326,51 @@ class PaymentServiceApplicationTests {
         );
         assertThat(conflict.status()).isEqualTo(409);
         assertThat(conflict.body()).contains("\"code\":\"IDEMPOTENCY_KEY_REUSED\"");
+    }
+
+    @Test
+    void concurrentPaymentCreationReturnsCreatedAndReplayForTheSameIdempotencyKey() throws Exception {
+        UUID payerUserId = UUID.randomUUID();
+        UUID referenceId = UUID.randomUUID();
+        String idempotencyKey = "pay-race-" + UUID.randomUUID();
+        String body = paymentBody("BOOKING", referenceId, "BOOKING_DEPOSIT", "180000", "VND");
+        CountDownLatch callersReady = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            java.util.concurrent.Callable<TestHttpResponse> createPayment = () -> {
+                callersReady.countDown();
+                if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Concurrent payment callers did not start in time");
+                }
+                return request(
+                        "POST",
+                        "/api/v1/payments",
+                        gatewayHeaders(payerUserId, idempotencyKey),
+                        body
+                );
+            };
+            Future<TestHttpResponse> first = executor.submit(createPayment);
+            Future<TestHttpResponse> second = executor.submit(createPayment);
+            assertThat(callersReady.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            TestHttpResponse firstResponse = first.get(30, TimeUnit.SECONDS);
+            TestHttpResponse secondResponse = second.get(30, TimeUnit.SECONDS);
+            assertThat(List.of(firstResponse.status(), secondResponse.status()))
+                    .containsExactlyInAnyOrder(201, 200);
+            assertThat(extractPaymentId(firstResponse.body()))
+                    .isEqualTo(extractPaymentId(secondResponse.body()));
+            assertThat(jdbcTemplate.queryForObject(
+                    "select count(*) from payments where idempotency_key = ?",
+                    Integer.class,
+                    idempotencyKey
+            )).isEqualTo(1);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
     }
 
     @Test

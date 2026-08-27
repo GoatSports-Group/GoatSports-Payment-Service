@@ -9,6 +9,7 @@ import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.exception.PaymentNotFoundException;
 import iuh.fit.paymentservice.application.mapper.PaymentMapper;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
+import iuh.fit.paymentservice.application.service.PaymentCreationTransactionService;
 import iuh.fit.paymentservice.application.service.PaymentService;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
@@ -34,9 +35,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
+    private final PaymentCreationTransactionService paymentCreationTransactionService;
 
     @Override
-    @Transactional
     public CreatePaymentResult createPayment(CreatePaymentCommand command) {
         ValidatedPayment validated = validate(command);
         String requestHash = requestHash(command, validated);
@@ -68,7 +69,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
 
         try {
-            Payment savedPayment = paymentRepository.save(payment);
+            Payment savedPayment = paymentCreationTransactionService.create(payment);
             return new CreatePaymentResult(paymentMapper.toPaymentResponseCommand(savedPayment), false);
         } catch (DataIntegrityViolationException exception) {
             return resolveConcurrentCreate(command, validated.idempotencyKey(), requestHash);
