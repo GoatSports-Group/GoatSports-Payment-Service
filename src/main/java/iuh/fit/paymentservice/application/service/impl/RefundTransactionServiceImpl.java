@@ -11,6 +11,7 @@ import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptReposit
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.port.persistence.RefundRepository;
 import iuh.fit.paymentservice.application.service.RefundTransactionService;
+import iuh.fit.paymentservice.application.service.PaymentDomainEventService;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.entity.Refund;
@@ -53,6 +54,7 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
     private final PaymentRepository paymentRepository;
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final RefundRepository refundRepository;
+    private final PaymentDomainEventService paymentDomainEventService;
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -99,6 +101,9 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
                 .status(initialStatus)
                 .failureReason(failureReason)
                 .build());
+        if (refund.getStatus() == RefundStatus.MANUAL_REVIEW) {
+            paymentDomainEventService.recordRefundResult(refund, payment.getStatus());
+        }
 
         return new PreparedRefundResult(
                 refund,
@@ -129,7 +134,8 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
             refund.setFailureReason(null);
             refund.setRefundedAt(LocalDateTime.now());
             refund = refundRepository.save(refund);
-            updatePaymentRefundStatus(refund);
+            Payment payment = updatePaymentRefundStatus(refund);
+            paymentDomainEventService.recordRefundResult(refund, payment.getStatus());
             return refund;
         }
         if (providerResult.getStatus() == ProviderRefundStatus.PENDING) {
@@ -138,14 +144,21 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
             return refundRepository.save(refund);
         }
         if (providerResult.getStatus() == ProviderRefundStatus.MANUAL_REVIEW) {
+            if (refund.getStatus() == RefundStatus.MANUAL_REVIEW) {
+                return refund;
+            }
             refund.setStatus(RefundStatus.MANUAL_REVIEW);
             refund.setFailureReason(truncate(providerResult.getFailureReason(), 500));
-            return refundRepository.save(refund);
+            refund = refundRepository.save(refund);
+            paymentDomainEventService.recordRefundResult(refund, currentPaymentStatus(refund));
+            return refund;
         }
 
         refund.setStatus(RefundStatus.FAILED);
         refund.setFailureReason(truncate(providerResult.getFailureReason(), 500));
-        return refundRepository.save(refund);
+        refund = refundRepository.save(refund);
+        paymentDomainEventService.recordRefundResult(refund, currentPaymentStatus(refund));
+        return refund;
     }
 
     @Override
@@ -155,12 +168,17 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
         if (refund.getStatus() == RefundStatus.SUCCEEDED || refund.getStatus() == RefundStatus.FAILED) {
             return refund;
         }
+        if (refund.getStatus() == RefundStatus.MANUAL_REVIEW) {
+            return refund;
+        }
         refund.setStatus(RefundStatus.MANUAL_REVIEW);
         refund.setFailureReason(truncate(reason, 500));
-        return refundRepository.save(refund);
+        refund = refundRepository.save(refund);
+        paymentDomainEventService.recordRefundResult(refund, currentPaymentStatus(refund));
+        return refund;
     }
 
-    private void updatePaymentRefundStatus(Refund currentRefund) {
+    private Payment updatePaymentRefundStatus(Refund currentRefund) {
         Payment payment = paymentRepository.findByIdForUpdate(currentRefund.getPaymentId())
                 .orElseThrow(() -> new PaymentNotFoundException(currentRefund.getPaymentId()));
         BigDecimal successfulAmount = refundRepository.findByPaymentIdAndStatuses(
@@ -175,7 +193,13 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
         payment.setStatus(successfulAmount.compareTo(paymentAmount) >= 0
                 ? PaymentStatus.REFUNDED
                 : PaymentStatus.PARTIALLY_REFUNDED);
-        paymentRepository.save(payment);
+        return paymentRepository.save(payment);
+    }
+
+    private PaymentStatus currentPaymentStatus(Refund refund) {
+        return paymentRepository.findById(refund.getPaymentId())
+                .orElseThrow(() -> new PaymentNotFoundException(refund.getPaymentId()))
+                .getStatus();
     }
 
     private void validateCommand(CreateRefundCommand command) {

@@ -5,6 +5,7 @@ import iuh.fit.paymentservice.application.exception.PaymentProviderException;
 import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.service.ProviderPaymentResultService;
+import iuh.fit.paymentservice.application.service.PaymentDomainEventService;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
@@ -31,6 +32,7 @@ public class ProviderPaymentResultServiceImpl implements ProviderPaymentResultSe
 
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final PaymentRepository paymentRepository;
+    private final PaymentDomainEventService paymentDomainEventService;
 
     @Override
     @Transactional(noRollbackFor = PaymentProviderException.class)
@@ -66,6 +68,7 @@ public class ProviderPaymentResultServiceImpl implements ProviderPaymentResultSe
         }
         paymentAttemptRepository.save(attempt);
         paymentRepository.save(payment);
+        paymentDomainEventService.recordPaymentResult(payment, attempt, payment.getPayerId());
         return true;
     }
 

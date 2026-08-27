@@ -9,6 +9,7 @@ import iuh.fit.paymentservice.application.mapper.PaymentAttemptMapper;
 import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.service.CashCollectionService;
+import iuh.fit.paymentservice.application.service.PaymentDomainEventService;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
@@ -43,6 +44,7 @@ public class CashCollectionServiceImpl implements CashCollectionService {
     private final PaymentRepository paymentRepository;
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final PaymentAttemptMapper paymentAttemptMapper;
+    private final PaymentDomainEventService paymentDomainEventService;
 
     @Override
     @Transactional
@@ -89,6 +91,7 @@ public class CashCollectionServiceImpl implements CashCollectionService {
         payment.setStatus(PaymentStatus.SUCCEEDED);
         payment.setPaidAt(now);
         paymentRepository.save(payment);
+        paymentDomainEventService.recordPaymentResult(payment, cashAttempt, command.getCollectorId());
         return result(cashAttempt, false);
     }
 
