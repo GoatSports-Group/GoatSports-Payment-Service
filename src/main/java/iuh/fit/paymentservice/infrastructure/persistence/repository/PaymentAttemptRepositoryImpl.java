@@ -3,6 +3,7 @@ package iuh.fit.paymentservice.infrastructure.persistence.repository;
 import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
+import iuh.fit.paymentservice.domain.enums.PaymentMethod;
 import iuh.fit.paymentservice.domain.enums.PaymentProvider;
 import iuh.fit.paymentservice.infrastructure.persistence.mapper.PaymentAttemptEntityMapper;
 import iuh.fit.paymentservice.infrastructure.persistence.repository.jpa.JpaPaymentAttemptRepository;
@@ -47,6 +48,23 @@ public class PaymentAttemptRepositoryImpl implements PaymentAttemptRepository {
     ) {
         return jpaPaymentAttemptRepository
                 .findFirstByPaymentIdAndStatusInOrderByCreatedAtDesc(paymentId, statuses)
+                .map(paymentAttemptEntityMapper::toDomain);
+    }
+
+    @Override
+    public Optional<PaymentAttempt> findLatestByPaymentIdAndProviderAndMethodAndStatuses(
+            UUID paymentId,
+            PaymentProvider provider,
+            PaymentMethod method,
+            Collection<PaymentAttemptStatus> statuses
+    ) {
+        return jpaPaymentAttemptRepository
+                .findFirstByPaymentIdAndProviderAndMethodAndStatusInOrderByCreatedAtDesc(
+                        paymentId,
+                        provider,
+                        method,
+                        statuses
+                )
                 .map(paymentAttemptEntityMapper::toDomain);
     }
 

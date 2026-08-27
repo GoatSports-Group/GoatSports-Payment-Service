@@ -474,6 +474,114 @@ class PaymentServiceApplicationTests {
     }
 
     @Test
+    void internalCashCollectionIsSuccessfulIdempotentAndAuditedToCollector() throws Exception {
+        UUID payerUserId = UUID.randomUUID();
+        UUID collectorUserId = UUID.randomUUID();
+        TestHttpResponse paymentResponse = request(
+                "POST",
+                "/api/v1/payments",
+                gatewayHeaders(payerUserId, "pay-test-" + UUID.randomUUID()),
+                paymentBody("BOOKING", UUID.randomUUID(), "BOOKING_REMAINING", "250000", "VND")
+        );
+        assertThat(paymentResponse.status()).isEqualTo(201);
+        UUID paymentId = extractPaymentId(paymentResponse.body());
+
+        TestHttpResponse collected = request(
+                "POST",
+                "/internal/payments/" + paymentId + "/cash-collection",
+                gatewayHeaders(collectorUserId, null),
+                null
+        );
+        assertThat(collected.status()).isEqualTo(201);
+        JsonNode attempt = responseData(collected.body());
+        assertThat(attempt.path("paymentId").asText()).isEqualTo(paymentId.toString());
+        assertThat(attempt.path("provider").asText()).isEqualTo("MANUAL");
+        assertThat(attempt.path("method").asText()).isEqualTo("CASH");
+        assertThat(attempt.path("status").asText()).isEqualTo("SUCCEEDED");
+        assertThat(attempt.path("checkoutUrl").isNull()).isTrue();
+        assertThat(attempt.path("providerTransactionId").asText()).startsWith("CASH-");
+
+        Map<String, Object> payment = jdbcTemplate.queryForMap(
+                "select status, paid_at from payments where payment_id = ?",
+                paymentId
+        );
+        assertThat(payment).containsEntry("STATUS", "SUCCEEDED");
+        assertThat(payment.get("PAID_AT")).isNotNull();
+        Map<String, Object> persistedAttempt = jdbcTemplate.queryForMap(
+                "select created_by, updated_by, completed_at from payment_attempts where attempt_id = ?",
+                UUID.fromString(attempt.path("attemptId").asText())
+        );
+        assertThat(persistedAttempt).containsEntry("CREATED_BY", collectorUserId.toString());
+        assertThat(persistedAttempt).containsEntry("UPDATED_BY", collectorUserId.toString());
+        assertThat(persistedAttempt.get("COMPLETED_AT")).isNotNull();
+
+        TestHttpResponse replayed = request(
+                "POST",
+                "/internal/payments/" + paymentId + "/cash-collection",
+                gatewayHeaders(collectorUserId, null),
+                null
+        );
+        assertThat(replayed.status()).isEqualTo(200);
+        assertThat(responseData(replayed.body()).path("attemptId").asText())
+                .isEqualTo(attempt.path("attemptId").asText());
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from payment_attempts " +
+                        "where payment_id = ? and provider = 'MANUAL' and method = 'CASH'",
+                Integer.class,
+                paymentId
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void cashCollectionRequiresTrustedCallerAndRejectsActiveMomoAttempt() throws Exception {
+        UUID payerUserId = UUID.randomUUID();
+        UUID collectorUserId = UUID.randomUUID();
+        TestHttpResponse paymentResponse = request(
+                "POST",
+                "/api/v1/payments",
+                gatewayHeaders(payerUserId, "pay-test-" + UUID.randomUUID()),
+                paymentBody("BOOKING", UUID.randomUUID(), "BOOKING_REMAINING", "250000", "VND")
+        );
+        UUID paymentId = extractPaymentId(paymentResponse.body());
+
+        TestHttpResponse untrusted = request(
+                "POST",
+                "/internal/payments/" + paymentId + "/cash-collection",
+                Map.of("X-User-Id", collectorUserId.toString()),
+                null
+        );
+        assertThat(untrusted.status()).isEqualTo(403);
+
+        TestHttpResponse momoAttempt = request(
+                "POST",
+                "/api/v1/payments/" + paymentId + "/attempts",
+                gatewayHeaders(payerUserId, null),
+                "{\"method\":\"E_WALLET\",\"locale\":\"vn\"}"
+        );
+        assertThat(momoAttempt.status()).isEqualTo(201);
+
+        TestHttpResponse conflict = request(
+                "POST",
+                "/internal/payments/" + paymentId + "/cash-collection",
+                gatewayHeaders(collectorUserId, null),
+                null
+        );
+        assertThat(conflict.status()).isEqualTo(409);
+        assertThat(conflict.body()).contains("\"code\":\"PAYMENT_ATTEMPT_ACTIVE\"");
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from payment_attempts " +
+                        "where payment_id = ? and provider = 'MANUAL' and method = 'CASH'",
+                Integer.class,
+                paymentId
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "select status from payments where payment_id = ?",
+                String.class,
+                paymentId
+        )).isEqualTo("PENDING");
+    }
+
+    @Test
     void momoWebhookIsVerifiedIdempotentAndSafeForOutOfOrderEvents() throws Exception {
         UUID payerUserId = UUID.randomUUID();
         TestHttpResponse paymentResponse = request(

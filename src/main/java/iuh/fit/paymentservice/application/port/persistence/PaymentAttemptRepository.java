@@ -2,6 +2,7 @@ package iuh.fit.paymentservice.application.port.persistence;
 
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
+import iuh.fit.paymentservice.domain.enums.PaymentMethod;
 import iuh.fit.paymentservice.domain.enums.PaymentProvider;
 
 import java.util.Collection;
@@ -19,6 +20,13 @@ public interface PaymentAttemptRepository {
 
     Optional<PaymentAttempt> findLatestByPaymentIdAndStatuses(
             UUID paymentId,
+            Collection<PaymentAttemptStatus> statuses
+    );
+
+    Optional<PaymentAttempt> findLatestByPaymentIdAndProviderAndMethodAndStatuses(
+            UUID paymentId,
+            PaymentProvider provider,
+            PaymentMethod method,
             Collection<PaymentAttemptStatus> statuses
     );
 

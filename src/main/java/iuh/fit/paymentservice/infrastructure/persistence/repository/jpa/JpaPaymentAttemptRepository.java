@@ -1,6 +1,7 @@
 package iuh.fit.paymentservice.infrastructure.persistence.repository.jpa;
 
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
+import iuh.fit.paymentservice.domain.enums.PaymentMethod;
 import iuh.fit.paymentservice.domain.enums.PaymentProvider;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.PaymentAttemptEntity;
 import jakarta.persistence.LockModeType;
@@ -24,6 +25,13 @@ public interface JpaPaymentAttemptRepository extends JpaRepository<PaymentAttemp
 
     Optional<PaymentAttemptEntity> findFirstByPaymentIdAndStatusInOrderByCreatedAtDesc(
             UUID paymentId,
+            Collection<PaymentAttemptStatus> statuses
+    );
+
+    Optional<PaymentAttemptEntity> findFirstByPaymentIdAndProviderAndMethodAndStatusInOrderByCreatedAtDesc(
+            UUID paymentId,
+            PaymentProvider provider,
+            PaymentMethod method,
             Collection<PaymentAttemptStatus> statuses
     );
 
