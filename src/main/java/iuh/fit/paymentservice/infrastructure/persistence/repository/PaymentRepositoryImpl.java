@@ -9,7 +9,9 @@ import iuh.fit.paymentservice.infrastructure.persistence.repository.jpa.JpaPayme
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -53,5 +55,14 @@ public class PaymentRepositoryImpl implements PaymentRepository {
                         purpose
                 )
                 .map(paymentEntityMapper::toDomain);
+    }
+
+    @Override
+    public List<Payment> findByReferences(PaymentReferenceType referenceType, Set<UUID> referenceIds) {
+        return jpaPaymentRepository.findByReferenceTypeAndReferenceIdInOrderByCreatedAtAsc(
+                        referenceType, referenceIds
+                ).stream()
+                .map(paymentEntityMapper::toDomain)
+                .toList();
     }
 }

@@ -4,7 +4,9 @@ import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
 import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface PaymentRepository {
@@ -21,4 +23,6 @@ public interface PaymentRepository {
             UUID referenceId,
             PaymentPurpose purpose
     );
+
+    List<Payment> findByReferences(PaymentReferenceType referenceType, Set<UUID> referenceIds);
 }

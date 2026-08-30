@@ -13,6 +13,7 @@ import iuh.fit.paymentservice.application.service.PaymentCreationTransactionServ
 import iuh.fit.paymentservice.application.service.PaymentService;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
+import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -23,7 +24,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -85,6 +88,29 @@ public class PaymentServiceImpl implements PaymentService {
             throw new PaymentAccessDeniedException();
         }
         return paymentMapper.toPaymentResponseCommand(payment);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PaymentResponseCommand> getPaymentsByReferences(
+            PaymentReferenceType referenceType,
+            Set<UUID> referenceIds
+    ) {
+        if (referenceType == null || referenceIds == null || referenceIds.isEmpty()) {
+            throw new InvalidPaymentException(
+                    "REFERENCE_REQUIRED",
+                    "Reference type và ít nhất một reference ID là bắt buộc"
+            );
+        }
+        if (referenceIds.size() > 100 || referenceIds.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new InvalidPaymentException(
+                    "INVALID_REFERENCE_QUERY",
+                    "Mỗi truy vấn chỉ hỗ trợ tối đa 100 reference ID hợp lệ"
+            );
+        }
+        return paymentRepository.findByReferences(referenceType, referenceIds).stream()
+                .map(paymentMapper::toPaymentResponseCommand)
+                .toList();
     }
 
     private CreatePaymentResult resolveConcurrentCreate(
