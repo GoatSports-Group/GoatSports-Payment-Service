@@ -6,48 +6,86 @@ import iuh.fit.paymentservice.application.dto.request.payment.CreatePaymentComma
 import iuh.fit.paymentservice.application.dto.response.attempt.CreatePaymentAttemptResult;
 import iuh.fit.paymentservice.application.dto.response.payment.BookingCheckoutResult;
 import iuh.fit.paymentservice.application.dto.response.payment.CreatePaymentResult;
+import iuh.fit.paymentservice.application.exception.PaymentConflictException;
+import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.service.BookingCheckoutService;
 import iuh.fit.paymentservice.application.service.PaymentAttemptService;
 import iuh.fit.paymentservice.application.service.PaymentService;
 import iuh.fit.paymentservice.domain.enums.PaymentMethod;
 import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
 import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
+import iuh.fit.paymentservice.domain.enums.PaymentStatus;
+import iuh.fit.paymentservice.domain.entity.Payment;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class BookingCheckoutServiceImpl implements BookingCheckoutService {
     private final PaymentService paymentService;
     private final PaymentAttemptService paymentAttemptService;
+    private final PaymentRepository paymentRepository;
 
     @Override
     public BookingCheckoutResult create(CreateBookingCheckoutCommand command) {
-        CreatePaymentResult created = paymentService.createPayment(CreatePaymentCommand.builder()
-                .payerId(command.payerId())
-                .referenceType(PaymentReferenceType.BOOKING)
-                .referenceId(command.bookingId())
-                .purpose(PaymentPurpose.BOOKING_REMAINING)
-                .amount(command.amount())
-                .currency(command.currency())
-                .description("Thanh toán booking walk-in qua MoMo")
-                .idempotencyKey("booking-remaining:" + command.bookingId())
-                .build());
+        Payment existing = paymentRepository.findByReference(
+                PaymentReferenceType.BOOKING, command.bookingId(), PaymentPurpose.BOOKING_REMAINING
+        ).orElse(null);
+        UUID paymentId;
+        LocalDateTime expiresAt;
+        if (existing == null) {
+            CreatePaymentResult created = paymentService.createPayment(CreatePaymentCommand.builder()
+                    .payerId(command.payerId())
+                    .referenceType(PaymentReferenceType.BOOKING)
+                    .referenceId(command.bookingId())
+                    .purpose(PaymentPurpose.BOOKING_REMAINING)
+                    .amount(command.amount())
+                    .currency(command.currency())
+                    .description("Thanh toán số tiền còn lại của booking")
+                    .idempotencyKey("booking-remaining:" + command.bookingId())
+                    .build());
+            paymentId = created.getPayment().getPaymentId();
+            expiresAt = created.getPayment().getExpiresAt();
+        } else {
+            validateExisting(existing, command);
+            paymentId = existing.getPaymentId();
+            expiresAt = existing.getExpiresAt();
+        }
 
         CreatePaymentAttemptResult attempt = paymentAttemptService.createPaymentAttempt(
                 CreatePaymentAttemptCommand.builder()
-                        .paymentId(created.getPayment().getPaymentId())
+                        .paymentId(paymentId)
                         .payerId(command.payerId())
                         .method(PaymentMethod.E_WALLET)
                         .locale(command.locale())
                         .ipAddress(command.ipAddress())
                         .build()
         );
+        Payment refreshedPayment = paymentRepository.findById(paymentId).orElse(existing);
+        String status = refreshedPayment == null
+                ? PaymentStatus.PENDING.name()
+                : refreshedPayment.getStatus().name();
         return new BookingCheckoutResult(
-                created.getPayment().getPaymentId(),
-                "PENDING",
+                paymentId,
+                status,
                 attempt.getPaymentAttempt().getCheckoutUrl(),
-                created.getPayment().getExpiresAt()
+                attempt.getPaymentAttempt().getDeeplink(),
+                attempt.getPaymentAttempt().getQrCodeContent(),
+                expiresAt
         );
+    }
+
+    private void validateExisting(Payment payment, CreateBookingCheckoutCommand command) {
+        if (!payment.getPayerId().equals(command.payerId())
+                || Math.abs(payment.getAmount() - command.amount()) >= 0.01
+                || !payment.getCurrency().equalsIgnoreCase(command.currency())) {
+            throw new PaymentConflictException(
+                    "BOOKING_PAYMENT_MISMATCH",
+                    "Payment hiện tại không khớp booking, người thanh toán hoặc số tiền cần thu"
+            );
+        }
     }
 }

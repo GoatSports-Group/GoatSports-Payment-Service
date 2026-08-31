@@ -283,7 +283,11 @@ class RefundIntegrationTests {
         @Bean
         @Primary
         PaymentCheckoutPort paymentCheckoutPort() {
-            return command -> "https://test-payment.momo.vn/pay";
+            return command -> new iuh.fit.paymentservice.application.dto.response.attempt.ProviderCheckoutResult(
+                    "https://test-payment.momo.vn/pay",
+                    "momo://app?action=payWithApp&sid=test",
+                    "momo://app?action=payWithApp&isScanQR=true&sid=test"
+            );
         }
 
         @Bean

@@ -33,6 +33,8 @@ public class PaymentAttemptConverter {
                 .method(command.getMethod())
                 .providerTransactionId(command.getProviderTransactionId())
                 .checkoutUrl(command.getCheckoutUrl())
+                .deeplink(command.getDeeplink())
+                .qrCodeContent(command.getQrCodeContent())
                 .status(command.getStatus())
                 .failureCode(command.getFailureCode())
                 .failureReason(command.getFailureReason())

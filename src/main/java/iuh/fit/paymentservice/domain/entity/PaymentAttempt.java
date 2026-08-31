@@ -24,6 +24,8 @@ public class PaymentAttempt extends BaseEntity {
     private PaymentMethod method;
     private String providerTransactionId;
     private String checkoutUrl;
+    private String deeplink;
+    private String qrCodeContent;
     private PaymentAttemptStatus status;
     private String failureCode;
     private String failureReason;

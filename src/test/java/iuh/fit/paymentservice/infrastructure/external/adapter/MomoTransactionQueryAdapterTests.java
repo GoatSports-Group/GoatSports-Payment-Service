@@ -104,6 +104,31 @@ class MomoTransactionQueryAdapterTests {
         server.verify();
     }
 
+    @Test
+    void expiredResultMayOmitAmountAndStillClosesTheMatchingAttempt() {
+        String reference = ATTEMPT_ID.toString().replace("-", "");
+        server.expect(requestTo(QUERY_URL))
+                .andRespond(withSuccess("""
+                        {
+                          "partnerCode":"MOMO_TEST",
+                          "requestId":"%s",
+                          "orderId":"%s",
+                          "amount":null,
+                          "transId":null,
+                          "resultCode":1005,
+                          "message":"Transaction expired or does not exist.",
+                          "responseTime":1787840000000
+                        }
+                        """.formatted(reference, reference), MediaType.APPLICATION_JSON));
+
+        ProviderTransactionStatus status = adapter.query(command());
+
+        assertThat(status.getResultCode()).isEqualTo(1005);
+        assertThat(status.getAmount()).isEqualTo(150_000L);
+        assertThat(status.getProviderTransactionId()).isNull();
+        server.verify();
+    }
+
     private ProviderTransactionQueryCommand command() {
         return ProviderTransactionQueryCommand.builder()
                 .attemptId(ATTEMPT_ID)

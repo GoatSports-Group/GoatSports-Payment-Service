@@ -66,7 +66,7 @@ public class MomoTransactionQueryAdapter implements ProviderTransactionQueryPort
         validateResponse(response, reference, command.getExpectedAmount());
         return ProviderTransactionStatus.builder()
                 .providerTransactionId(validTransactionId(response.transId()))
-                .amount(response.amount())
+                .amount(resolvedAmount(response, command.getExpectedAmount()))
                 .resultCode(response.resultCode())
                 .message(response.message())
                 .occurredAt(providerTime(response.responseTime()))
@@ -121,16 +121,22 @@ public class MomoTransactionQueryAdapter implements ProviderTransactionQueryPort
                     "MoMo chưa thể xác nhận giao dịch: " + safeMessage(response.message())
             );
         }
+        boolean amountMismatch = response.amount() == null
+                ? response.resultCode() != 1005
+                : response.amount() != providerAmount(expectedAmount);
         if (!properties.getPartnerCode().equals(response.partnerCode())
                 || !expectedReference.equals(response.orderId())
                 || !expectedReference.equals(response.requestId())
-                || response.amount() == null
-                || response.amount() != providerAmount(expectedAmount)) {
+                || amountMismatch) {
             throw providerError(
                     "MOMO_QUERY_RESPONSE_MISMATCH",
                     "Thông tin truy vấn từ MoMo không khớp với payment attempt"
             );
         }
+    }
+
+    private long resolvedAmount(MomoQueryResponse response, Double expectedAmount) {
+        return response.amount() == null ? providerAmount(expectedAmount) : response.amount();
     }
 
     private void validateCommand(ProviderTransactionQueryCommand command) {

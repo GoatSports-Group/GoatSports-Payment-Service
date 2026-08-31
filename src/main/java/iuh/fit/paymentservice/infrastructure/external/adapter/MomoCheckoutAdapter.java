@@ -1,6 +1,7 @@
 package iuh.fit.paymentservice.infrastructure.external.adapter;
 
 import iuh.fit.paymentservice.application.dto.request.webhook.ProviderCheckoutCommand;
+import iuh.fit.paymentservice.application.dto.response.attempt.ProviderCheckoutResult;
 import iuh.fit.paymentservice.application.exception.PaymentProviderException;
 import iuh.fit.paymentservice.application.port.client.PaymentCheckoutPort;
 import iuh.fit.paymentservice.domain.enums.PaymentMethod;
@@ -52,7 +53,7 @@ public class MomoCheckoutAdapter implements PaymentCheckoutPort {
     }
 
     @Override
-    public String createCheckoutUrl(ProviderCheckoutCommand command) {
+    public ProviderCheckoutResult createCheckout(ProviderCheckoutCommand command) {
         properties.requireEnabled();
         validateMethod(command.getMethod());
 
@@ -83,7 +84,11 @@ public class MomoCheckoutAdapter implements PaymentCheckoutPort {
 
         MomoCreatePaymentResponse response = send(request);
         validateResponse(response, amount, orderId, requestId);
-        return response.payUrl();
+        return new ProviderCheckoutResult(
+                response.payUrl(),
+                response.deeplink(),
+                directQrContent(response)
+        );
     }
 
     String rawRequestSignature(long amount, String orderId, String orderInfo, String requestId) {
@@ -165,6 +170,16 @@ public class MomoCheckoutAdapter implements PaymentCheckoutPort {
             );
         }
         verifyResponseSignatureIfPresent(response);
+    }
+
+    private String directQrContent(MomoCreatePaymentResponse response) {
+        if (response.qrCodeUrl() != null && !response.qrCodeUrl().isBlank()) {
+            return response.qrCodeUrl();
+        }
+        if (response.deeplink() != null && !response.deeplink().isBlank()) {
+            return response.deeplink();
+        }
+        return null;
     }
 
     private void verifyResponseSignatureIfPresent(MomoCreatePaymentResponse response) {

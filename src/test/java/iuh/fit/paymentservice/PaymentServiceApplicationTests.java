@@ -74,7 +74,7 @@ class PaymentServiceApplicationTests {
                 Integer.class
         );
 
-        assertThat(changeCount).isEqualTo(4);
+        assertThat(changeCount).isEqualTo(5);
 
         List<String> paymentColumns = jdbcTemplate.queryForList(
                 "select column_name from information_schema.columns " +
@@ -112,6 +112,8 @@ class PaymentServiceApplicationTests {
                 "method",
                 "provider_transaction_id",
                 "checkout_url",
+                "deeplink",
+                "qr_code_content",
                 "status",
                 "failure_code",
                 "failure_reason",
@@ -181,6 +183,8 @@ class PaymentServiceApplicationTests {
                 Map.entry("method", PaymentMethod.class),
                 Map.entry("providerTransactionId", String.class),
                 Map.entry("checkoutUrl", String.class),
+                Map.entry("deeplink", String.class),
+                Map.entry("qrCodeContent", String.class),
                 Map.entry("status", PaymentAttemptStatus.class),
                 Map.entry("failureCode", String.class),
                 Map.entry("failureReason", String.class),
@@ -887,8 +891,26 @@ class PaymentServiceApplicationTests {
         @Bean
         @Primary
         PaymentCheckoutPort paymentCheckoutPort() {
-            return command -> "https://test-payment.momo.vn/v2/gateway/pay?orderId="
-                    + command.getAttemptId().toString().replace("-", "");
+            return command -> {
+                String token = command.getAttemptId().toString().replace("-", "");
+                return new iuh.fit.paymentservice.application.dto.response.attempt.ProviderCheckoutResult(
+                        "https://test-payment.momo.vn/v2/gateway/pay?orderId=" + token,
+                        "momo://app?action=payWithApp&sid=" + token,
+                        "momo://app?action=payWithApp&isScanQR=true&sid=" + token
+                );
+            };
+        }
+
+        @Bean
+        @Primary
+        iuh.fit.paymentservice.application.port.client.ProviderTransactionQueryPort providerTransactionQueryPort() {
+            return command -> iuh.fit.paymentservice.application.dto.response.webhook.ProviderTransactionStatus
+                    .builder()
+                    .amount(java.math.BigDecimal.valueOf(command.getExpectedAmount()).longValueExact())
+                    .resultCode(1000)
+                    .message("Transaction is being processed")
+                    .occurredAt(LocalDateTime.now())
+                    .build();
         }
     }
 }

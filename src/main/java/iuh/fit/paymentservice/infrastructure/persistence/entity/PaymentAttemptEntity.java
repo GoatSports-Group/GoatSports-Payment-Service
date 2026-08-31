@@ -44,6 +44,10 @@ public class PaymentAttemptEntity extends BaseEntity {
     private String providerTransactionId;
     @Column(name = "checkout_url", columnDefinition = "TEXT")
     private String checkoutUrl;
+    @Column(name = "deeplink", columnDefinition = "TEXT")
+    private String deeplink;
+    @Column(name = "qr_code_content", columnDefinition = "TEXT")
+    private String qrCodeContent;
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 32)
     private PaymentAttemptStatus status;

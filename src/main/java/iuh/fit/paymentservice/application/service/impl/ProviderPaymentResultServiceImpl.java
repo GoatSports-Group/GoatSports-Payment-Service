@@ -119,7 +119,9 @@ public class ProviderPaymentResultServiceImpl implements ProviderPaymentResultSe
                 && !"0".equals(command.getProviderTransactionId())) {
             attempt.setProviderTransactionId(command.getProviderTransactionId());
         }
-        attempt.setStatus(PaymentAttemptStatus.FAILED);
+        attempt.setStatus(isExpired(command.getResultCode())
+                ? PaymentAttemptStatus.EXPIRED
+                : PaymentAttemptStatus.FAILED);
         attempt.setFailureCode(truncate("MOMO_RESULT_" + command.getResultCode(), 64));
         attempt.setFailureReason(truncate(command.getMessage(), 500));
         attempt.setCompletedAt(occurredAt(command));
@@ -174,6 +176,10 @@ public class ProviderPaymentResultServiceImpl implements ProviderPaymentResultSe
 
     private boolean isPending(int resultCode) {
         return resultCode == 1000 || resultCode == 7000 || resultCode == 7002;
+    }
+
+    private boolean isExpired(int resultCode) {
+        return resultCode == 1005;
     }
 
     private LocalDateTime occurredAt(ProviderPaymentResultCommand command) {

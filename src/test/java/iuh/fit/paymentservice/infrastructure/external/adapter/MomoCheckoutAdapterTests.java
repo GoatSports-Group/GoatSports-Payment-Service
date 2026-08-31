@@ -25,6 +25,8 @@ class MomoCheckoutAdapterTests {
     private static final UUID ATTEMPT_ID = UUID.fromString("27bbad9f-70c8-4482-94d1-207b50339a61");
     private static final String API_URL = "https://test-payment.momo.vn/v2/gateway/api/create";
     private static final String PAY_URL = "https://test-payment.momo.vn/v2/gateway/pay?t=test-token";
+    private static final String DEEPLINK = "momo://app?action=payWithApp&sid=test-token";
+    private static final String QR_CODE_CONTENT = "momo://app?action=payWithApp&isScanQR=true&sid=test-token";
 
     private MomoProperties properties;
     private MockRestServiceServer server;
@@ -77,13 +79,19 @@ class MomoCheckoutAdapterTests {
                           "message":"Successful.",
                           "resultCode":0,
                           "payUrl":"%s",
+                          "deeplink":"%s",
+                          "qrCodeUrl":"%s",
                           "signature":"%s"
                         }
-                        """.formatted(orderId, orderId, PAY_URL, responseSignature), MediaType.APPLICATION_JSON));
+                        """.formatted(
+                                orderId, orderId, PAY_URL, DEEPLINK, QR_CODE_CONTENT, responseSignature
+                        ), MediaType.APPLICATION_JSON));
 
-        String checkoutUrl = adapter.createCheckoutUrl(command(orderInfo));
+        var checkout = adapter.createCheckout(command(orderInfo));
 
-        assertThat(checkoutUrl).isEqualTo(PAY_URL);
+        assertThat(checkout.checkoutUrl()).isEqualTo(PAY_URL);
+        assertThat(checkout.deeplink()).isEqualTo(DEEPLINK);
+        assertThat(checkout.qrCodeContent()).isEqualTo(QR_CODE_CONTENT);
         server.verify();
     }
 
@@ -105,9 +113,34 @@ class MomoCheckoutAdapterTests {
                         }
                         """.formatted(orderId, orderId, PAY_URL, "0".repeat(64)), MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> adapter.createCheckoutUrl(command("GoatSports payment 123")))
+        assertThatThrownBy(() -> adapter.createCheckout(command("GoatSports payment 123")))
                 .isInstanceOf(PaymentProviderException.class)
                 .hasMessage("Chữ ký response từ MoMo không hợp lệ");
+        server.verify();
+    }
+
+    @Test
+    void keepsValidHostedCheckoutWhenDirectQrIsUnavailable() {
+        String orderId = ATTEMPT_ID.toString().replace("-", "");
+        server.expect(requestTo(API_URL))
+                .andRespond(withSuccess("""
+                        {
+                          "partnerCode":"MOMO_TEST",
+                          "requestId":"%s",
+                          "orderId":"%s",
+                          "amount":150000,
+                          "responseTime":1787840000000,
+                          "message":"Successful.",
+                          "resultCode":0,
+                          "payUrl":"%s"
+                        }
+                        """.formatted(orderId, orderId, PAY_URL), MediaType.APPLICATION_JSON));
+
+        var checkout = adapter.createCheckout(command("GoatSports payment 123"));
+
+        assertThat(checkout.checkoutUrl()).isEqualTo(PAY_URL);
+        assertThat(checkout.deeplink()).isNull();
+        assertThat(checkout.qrCodeContent()).isNull();
         server.verify();
     }
 
@@ -128,7 +161,7 @@ class MomoCheckoutAdapterTests {
                         }
                         """.formatted(orderId, PAY_URL), MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> adapter.createCheckoutUrl(command("GoatSports payment 123")))
+        assertThatThrownBy(() -> adapter.createCheckout(command("GoatSports payment 123")))
                 .isInstanceOf(PaymentProviderException.class)
                 .hasMessage("Thông tin response từ MoMo không khớp với request");
         server.verify();

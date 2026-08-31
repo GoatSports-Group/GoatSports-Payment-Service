@@ -1,8 +1,12 @@
 package iuh.fit.paymentservice.application.service.impl;
 
 import iuh.fit.paymentservice.application.dto.request.attempt.CreatePaymentAttemptCommand;
+import iuh.fit.paymentservice.application.dto.request.payment.ProviderPaymentResultCommand;
 import iuh.fit.paymentservice.application.dto.request.webhook.ProviderCheckoutCommand;
+import iuh.fit.paymentservice.application.dto.request.webhook.ProviderTransactionQueryCommand;
 import iuh.fit.paymentservice.application.dto.response.attempt.CreatePaymentAttemptResult;
+import iuh.fit.paymentservice.application.dto.response.attempt.ProviderCheckoutResult;
+import iuh.fit.paymentservice.application.dto.response.webhook.ProviderTransactionStatus;
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.exception.PaymentAccessDeniedException;
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
@@ -10,9 +14,11 @@ import iuh.fit.paymentservice.application.exception.PaymentNotFoundException;
 import iuh.fit.paymentservice.application.exception.PaymentProviderException;
 import iuh.fit.paymentservice.application.mapper.PaymentAttemptMapper;
 import iuh.fit.paymentservice.application.port.client.PaymentCheckoutPort;
+import iuh.fit.paymentservice.application.port.client.ProviderTransactionQueryPort;
 import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.service.PaymentAttemptService;
+import iuh.fit.paymentservice.application.service.ProviderPaymentResultService;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
@@ -35,10 +41,13 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
             PaymentAttemptStatus.REDIRECT_READY,
             PaymentAttemptStatus.PENDING
     );
+    private static final String LEGACY_DIRECT_QR_FAILURE = "MOMO_DIRECT_QR_UNAVAILABLE";
 
     private final PaymentRepository paymentRepository;
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final PaymentCheckoutPort paymentCheckoutPort;
+    private final ProviderTransactionQueryPort transactionQueryPort;
+    private final ProviderPaymentResultService providerPaymentResultService;
     private final PaymentAttemptMapper paymentAttemptMapper;
 
     @Override
@@ -63,10 +72,30 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
                         "Payment đang có một attempt hoạt động với phương thức khác"
                 );
             }
-            return new CreatePaymentAttemptResult(
-                    paymentAttemptMapper.toPaymentAttemptResponseCommand(existing),
-                    true
-            );
+            PaymentAttempt reconciled = reconcileActiveAttempt(existing, payment, command);
+            if (ACTIVE_ATTEMPT_STATUSES.contains(reconciled.getStatus())
+                    || reconciled.getStatus() == PaymentAttemptStatus.SUCCEEDED) {
+                return new CreatePaymentAttemptResult(
+                        paymentAttemptMapper.toPaymentAttemptResponseCommand(reconciled),
+                        true
+                );
+            }
+        } else {
+            Optional<PaymentAttempt> recoverableAttempt = paymentAttemptRepository
+                    .findLatestByPaymentIdAndStatuses(
+                            payment.getPaymentId(),
+                            EnumSet.of(PaymentAttemptStatus.FAILED)
+                    )
+                    .filter(attempt -> LEGACY_DIRECT_QR_FAILURE.equals(attempt.getFailureCode()));
+            if (recoverableAttempt.isPresent()) {
+                PaymentAttempt recovered = prepareCheckout(
+                        recoverableAttempt.get(), payment, command, now
+                );
+                return new CreatePaymentAttemptResult(
+                        paymentAttemptMapper.toPaymentAttemptResponseCommand(recovered),
+                        true
+                );
+            }
         }
 
         PaymentAttempt paymentAttempt = PaymentAttempt.builder()
@@ -78,9 +107,23 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
                 .build();
         paymentAttempt = paymentAttemptRepository.save(paymentAttempt);
 
-        String checkoutUrl;
+        paymentAttempt = prepareCheckout(paymentAttempt, payment, command, now);
+
+        return new CreatePaymentAttemptResult(
+                paymentAttemptMapper.toPaymentAttemptResponseCommand(paymentAttempt),
+                false
+        );
+    }
+
+    private PaymentAttempt prepareCheckout(
+            PaymentAttempt paymentAttempt,
+            Payment payment,
+            CreatePaymentAttemptCommand command,
+            LocalDateTime now
+    ) {
+        ProviderCheckoutResult checkout;
         try {
-            checkoutUrl = paymentCheckoutPort.createCheckoutUrl(
+            checkout = paymentCheckoutPort.createCheckout(
                     ProviderCheckoutCommand.builder()
                             .attemptId(paymentAttempt.getAttemptId())
                             .amount(payment.getAmount())
@@ -108,17 +151,41 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
             throw providerException;
         }
 
-        paymentAttempt.setCheckoutUrl(checkoutUrl);
+        paymentAttempt.setCheckoutUrl(checkout.checkoutUrl());
+        paymentAttempt.setDeeplink(checkout.deeplink());
+        paymentAttempt.setQrCodeContent(checkout.qrCodeContent());
         paymentAttempt.setStatus(PaymentAttemptStatus.REDIRECT_READY);
+        paymentAttempt.setFailureCode(null);
+        paymentAttempt.setFailureReason(null);
+        paymentAttempt.setCompletedAt(null);
         paymentAttempt = paymentAttemptRepository.save(paymentAttempt);
 
         payment.setStatus(PaymentStatus.PENDING);
         paymentRepository.save(payment);
+        return paymentAttempt;
+    }
 
-        return new CreatePaymentAttemptResult(
-                paymentAttemptMapper.toPaymentAttemptResponseCommand(paymentAttempt),
-                false
+    private PaymentAttempt reconcileActiveAttempt(
+            PaymentAttempt attempt,
+            Payment payment,
+            CreatePaymentAttemptCommand command
+    ) {
+        ProviderTransactionStatus status = transactionQueryPort.query(
+                ProviderTransactionQueryCommand.builder()
+                        .attemptId(attempt.getAttemptId())
+                        .expectedAmount(payment.getAmount())
+                        .locale(command.getLocale())
+                        .build()
         );
+        providerPaymentResultService.apply(ProviderPaymentResultCommand.builder()
+                .attemptId(attempt.getAttemptId())
+                .providerTransactionId(status.getProviderTransactionId())
+                .amount(status.getAmount())
+                .resultCode(status.getResultCode())
+                .message(status.getMessage())
+                .occurredAt(status.getOccurredAt())
+                .build());
+        return paymentAttemptRepository.findById(attempt.getAttemptId()).orElse(attempt);
     }
 
     private void validateCommand(CreatePaymentAttemptCommand command) {
