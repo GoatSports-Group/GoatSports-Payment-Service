@@ -2,22 +2,13 @@ package iuh.fit.paymentservice;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import iuh.fit.paymentservice.application.dto.request.refund.ProviderRefundCommand;
-import iuh.fit.paymentservice.application.dto.response.refund.ProviderRefundResult;
-import iuh.fit.paymentservice.application.dto.response.refund.ProviderRefundStatus;
-import iuh.fit.paymentservice.application.port.client.PaymentCheckoutPort;
-import iuh.fit.paymentservice.application.port.client.PaymentRefundPort;
 import iuh.fit.paymentservice.domain.entity.Refund;
 import iuh.fit.paymentservice.domain.enums.RefundStatus;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.RefundEntity;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -35,7 +26,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,7 +35,6 @@ import static org.assertj.core.api.Assertions.assertThat;
         properties = "spring.datasource.url=jdbc:h2:mem:refund_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1"
 )
 @ActiveProfiles("test")
-@Import(RefundIntegrationTests.StubProviderConfiguration.class)
 class RefundIntegrationTests {
     private static final String GATEWAY_SECRET = "test-gateway-secret";
 
@@ -57,9 +46,6 @@ class RefundIntegrationTests {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Autowired
-    private StubRefundPort stubRefundPort;
 
     @Test
     void refundDomainAndSchemaMatchClassDiagramExactly() {
@@ -92,17 +78,17 @@ class RefundIntegrationTests {
     }
 
     @Test
-    void partialThenFullRefundUpdatesPaymentAndIdempotentReplayDoesNotDuplicate() throws Exception {
-        UUID paymentId = createSucceededPayment("MOMO", "E_WALLET", 100_000D);
+    void partialThenFullRefundRequestsRemainManualAndIdempotentReplayDoesNotDuplicate() throws Exception {
+        UUID paymentId = createSucceededPayment("VIETQR", "BANK_TRANSFER", 100_000D);
         UUID requesterId = UUID.randomUUID();
         String firstKey = "refund-" + UUID.randomUUID();
 
         TestHttpResponse first = refund(paymentId, requesterId, firstKey, 40_000, "Hủy một phần sân");
         assertThat(first.status()).isEqualTo(201);
         JsonNode firstRefund = responseData(first.body());
-        assertThat(firstRefund.path("status").asText()).isEqualTo("SUCCEEDED");
+        assertThat(firstRefund.path("status").asText()).isEqualTo("MANUAL_REVIEW");
         assertThat(firstRefund.path("amount").asDouble()).isEqualTo(40_000D);
-        assertThat(paymentStatus(paymentId)).isEqualTo("PARTIALLY_REFUNDED");
+        assertThat(paymentStatus(paymentId)).isEqualTo("SUCCEEDED");
 
         TestHttpResponse replay = refund(paymentId, requesterId, firstKey, 40_000, "Hủy một phần sân");
         assertThat(replay.status()).isEqualTo(200);
@@ -114,14 +100,14 @@ class RefundIntegrationTests {
                 paymentId, requesterId, "refund-" + UUID.randomUUID(), 60_000, "Hủy phần còn lại"
         );
         assertThat(second.status()).isEqualTo(201);
-        assertThat(responseData(second.body()).path("status").asText()).isEqualTo("SUCCEEDED");
-        assertThat(paymentStatus(paymentId)).isEqualTo("REFUNDED");
+        assertThat(responseData(second.body()).path("status").asText()).isEqualTo("MANUAL_REVIEW");
+        assertThat(paymentStatus(paymentId)).isEqualTo("SUCCEEDED");
         assertThat(refundCount(paymentId)).isEqualTo(2);
     }
 
     @Test
     void refundCannotExceedUnreservedPaymentAmount() throws Exception {
-        UUID paymentId = createSucceededPayment("MOMO", "E_WALLET", 100_000D);
+        UUID paymentId = createSucceededPayment("VIETQR", "BANK_TRANSFER", 100_000D);
         UUID requesterId = UUID.randomUUID();
         assertThat(refund(paymentId, requesterId, "refund-" + UUID.randomUUID(),
                 40_000, "Refund lần một").status()).isEqualTo(201);
@@ -135,7 +121,7 @@ class RefundIntegrationTests {
 
     @Test
     void idempotencyKeyCannotBeReusedWithDifferentRefundPayload() throws Exception {
-        UUID paymentId = createSucceededPayment("MOMO", "E_WALLET", 100_000D);
+        UUID paymentId = createSucceededPayment("VIETQR", "BANK_TRANSFER", 100_000D);
         UUID requesterId = UUID.randomUUID();
         String key = "refund-" + UUID.randomUUID();
         assertThat(refund(paymentId, requesterId, key, 40_000, "Lý do A").status()).isEqualTo(201);
@@ -162,11 +148,10 @@ class RefundIntegrationTests {
     }
 
     @Test
-    void concurrentSameIdempotencyKeyCreatesOneRefundAndCallsProviderOnce() throws Exception {
-        UUID paymentId = createSucceededPayment("MOMO", "E_WALLET", 100_000D);
+    void concurrentSameIdempotencyKeyCreatesOneManualRefund() throws Exception {
+        UUID paymentId = createSucceededPayment("VIETQR", "BANK_TRANSFER", 100_000D);
         UUID requesterId = UUID.randomUUID();
         String key = "refund-race-" + UUID.randomUUID();
-        int callsBefore = stubRefundPort.calls();
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -190,7 +175,6 @@ class RefundIntegrationTests {
             assertThat(responseData(firstResponse.body()).path("refundId").asText())
                     .isEqualTo(responseData(secondResponse.body()).path("refundId").asText());
             assertThat(refundCount(paymentId)).isEqualTo(1);
-            assertThat(stubRefundPort.calls() - callsBefore).isEqualTo(1);
         } finally {
             start.countDown();
             executor.shutdownNow();
@@ -218,8 +202,7 @@ class RefundIntegrationTests {
                     created_at, updated_at, created_by, updated_by
                 ) values (?, ?, ?, ?, ?, null, 'SUCCEEDED', null, null, ?, ?, ?, ?, ?, ?)
                 """, attemptId, paymentId, provider, method,
-                provider.equals("MOMO") ? Long.toString(Math.abs(attemptId.getMostSignificantBits()))
-                        : "CASH-" + attemptId.toString().replace("-", ""),
+                provider + "-" + attemptId.toString().replace("-", ""),
                 now, now, now, now, payerId.toString(), payerId.toString());
         return paymentId;
     }
@@ -278,41 +261,4 @@ class RefundIntegrationTests {
     private record TestHttpResponse(int status, String body) {
     }
 
-    @TestConfiguration
-    static class StubProviderConfiguration {
-        @Bean
-        @Primary
-        PaymentCheckoutPort paymentCheckoutPort() {
-            return command -> new iuh.fit.paymentservice.application.dto.response.attempt.ProviderCheckoutResult(
-                    "https://test-payment.momo.vn/pay",
-                    "momo://app?action=payWithApp&sid=test",
-                    "momo://app?action=payWithApp&isScanQR=true&sid=test"
-            );
-        }
-
-        @Bean
-        @Primary
-        StubRefundPort paymentRefundPort() {
-            return new StubRefundPort();
-        }
-    }
-
-    static class StubRefundPort implements PaymentRefundPort {
-        private final AtomicInteger calls = new AtomicInteger();
-
-        @Override
-        public ProviderRefundResult refund(
-                ProviderRefundCommand command
-        ) {
-            calls.incrementAndGet();
-            return ProviderRefundResult.builder()
-                    .status(ProviderRefundStatus.SUCCEEDED)
-                    .providerRefundId("RF-" + command.getRefundId())
-                    .build();
-        }
-
-        int calls() {
-            return calls.get();
-        }
-    }
 }

@@ -7,7 +7,7 @@
 >
     <include file="/db/changelog/schema/27-08-2026/init-payment-schema.xml"/>
     <include file="/db/changelog/schema/27-08-2026/create-payment-attempt-schema.xml"/>
-    <include file="/db/changelog/schema/27-08-2026/create-provider-webhook-event-schema.xml"/>
     <include file="/db/changelog/schema/27-08-2026/create-refund-schema.xml"/>
-    <include file="/db/changelog/schema/31-08-2026/add-momo-direct-links-to-payment-attempt.xml"/>
+    <include file="/db/changelog/schema/31-08-2026/add-provider-checkout-links-to-payment-attempt.xml"/>
+    <include file="/db/changelog/schema/01-09-2026/retire-unsupported-payment-providers.xml"/>
 </databaseChangeLog>

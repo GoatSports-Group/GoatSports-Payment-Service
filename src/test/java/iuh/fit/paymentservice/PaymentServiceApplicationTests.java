@@ -5,17 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import iuh.fit.paymentservice.domain.entity.BaseEntity;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
-import iuh.fit.paymentservice.domain.entity.ProviderWebhookEvent;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
 import iuh.fit.paymentservice.domain.enums.PaymentMethod;
 import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
 import iuh.fit.paymentservice.domain.enums.PaymentProvider;
 import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
-import iuh.fit.paymentservice.domain.enums.WebhookProcessingStatus;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.PaymentAttemptEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.PaymentEntity;
-import iuh.fit.paymentservice.infrastructure.persistence.entity.ProviderWebhookEventEntity;
 import iuh.fit.paymentservice.application.port.client.PaymentCheckoutPort;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -31,15 +28,12 @@ import org.springframework.context.annotation.Import;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.lang.reflect.Modifier;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.HexFormat;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -125,53 +119,6 @@ class PaymentServiceApplicationTests {
                 "updated_by"
         );
 
-        List<String> webhookColumns = jdbcTemplate.queryForList(
-                "select column_name from information_schema.columns " +
-                        "where table_schema = 'public' and table_name = 'provider_webhook_events'",
-                String.class
-        );
-        assertThat(webhookColumns).containsExactlyInAnyOrder(
-                "webhook_event_id",
-                "attempt_id",
-                "provider",
-                "provider_event_id",
-                "payload_hash",
-                "signature_valid",
-                "status",
-                "received_at",
-                "processed_at",
-                "failure_reason",
-                "created_at",
-                "updated_at",
-                "created_by",
-                "updated_by"
-        );
-    }
-
-    @Test
-    void providerWebhookEventDomainMatchesClassDiagramExactly() {
-        assertThat(declaredFields(ProviderWebhookEvent.class)).containsExactlyInAnyOrderEntriesOf(
-                Map.ofEntries(
-                        Map.entry("webhookEventId", UUID.class),
-                        Map.entry("attemptId", UUID.class),
-                        Map.entry("provider", PaymentProvider.class),
-                        Map.entry("providerEventId", String.class),
-                        Map.entry("payloadHash", String.class),
-                        Map.entry("signatureValid", Boolean.class),
-                        Map.entry("status", WebhookProcessingStatus.class),
-                        Map.entry("receivedAt", LocalDateTime.class),
-                        Map.entry("processedAt", LocalDateTime.class),
-                        Map.entry("failureReason", String.class)
-                )
-        );
-        assertThat(declaredFields(ProviderWebhookEventEntity.class))
-                .containsExactlyInAnyOrderEntriesOf(declaredFields(ProviderWebhookEvent.class));
-        assertThat(Arrays.stream(WebhookProcessingStatus.values()).map(Enum::name)).containsExactly(
-                "RECEIVED",
-                "PROCESSED",
-                "IGNORED",
-                "FAILED"
-        );
     }
 
     @Test
@@ -196,11 +143,10 @@ class PaymentServiceApplicationTests {
         );
         assertThat(Arrays.stream(PaymentMethod.values()).map(Enum::name)).containsExactly(
                 "BANK_TRANSFER",
-                "E_WALLET",
                 "CASH"
         );
         assertThat(Arrays.stream(PaymentProvider.values()).map(Enum::name)).containsExactly(
-                "MOMO",
+                "VIETQR",
                 "MANUAL"
         );
         assertThat(Arrays.stream(PaymentAttemptStatus.values()).map(Enum::name)).containsExactly(
@@ -421,7 +367,7 @@ class PaymentServiceApplicationTests {
     }
 
     @Test
-    void createMomoCheckoutIsPersistedAndReplaySafe() throws Exception {
+    void createVietQrCheckoutIsPersistedAndReplaySafe() throws Exception {
         UUID payerUserId = UUID.randomUUID();
         TestHttpResponse paymentResponse = request(
                 "POST",
@@ -437,7 +383,7 @@ class PaymentServiceApplicationTests {
         headers.put("X-Forwarded-For", "203.0.113.10");
         String attemptBody = """
                 {
-                  "method": "E_WALLET",
+                  "method": "BANK_TRANSFER",
                   "locale": "vn"
                 }
                 """;
@@ -450,23 +396,24 @@ class PaymentServiceApplicationTests {
         );
         assertThat(created.status()).isEqualTo(201);
         JsonNode createdAttempt = responseData(created.body());
-        assertThat(createdAttempt.path("provider").asText()).isEqualTo("MOMO");
-        assertThat(createdAttempt.path("method").asText()).isEqualTo("E_WALLET");
-        assertThat(createdAttempt.path("status").asText()).isEqualTo("REDIRECT_READY");
+        assertThat(createdAttempt.path("provider").asText()).isEqualTo("VIETQR");
+        assertThat(createdAttempt.path("method").asText()).isEqualTo("BANK_TRANSFER");
+        assertThat(createdAttempt.path("status").asText()).isEqualTo("PENDING");
         assertThat(createdAttempt.path("providerTransactionId").isNull()).isTrue();
-
-        String checkoutUrl = createdAttempt.path("checkoutUrl").asText();
-        assertValidMomoCheckoutUrl(checkoutUrl, createdAttempt.path("attemptId").asText());
+        assertThat(createdAttempt.path("checkoutUrl").isNull()).isTrue();
+        assertThat(createdAttempt.path("qrCodeContent").asText())
+                .startsWith("data:image/png;base64,");
 
         Map<String, Object> persisted = jdbcTemplate.queryForMap(
-                "select provider, method, status, checkout_url, failure_code, failure_reason " +
+                "select provider, method, status, checkout_url, qr_code_content, failure_code, failure_reason " +
                         "from payment_attempts where attempt_id = ?",
                 UUID.fromString(createdAttempt.path("attemptId").asText())
         );
-        assertThat(persisted).containsEntry("PROVIDER", "MOMO");
-        assertThat(persisted).containsEntry("METHOD", "E_WALLET");
-        assertThat(persisted).containsEntry("STATUS", "REDIRECT_READY");
-        assertThat(persisted.get("CHECKOUT_URL")).isEqualTo(checkoutUrl);
+        assertThat(persisted).containsEntry("PROVIDER", "VIETQR");
+        assertThat(persisted).containsEntry("METHOD", "BANK_TRANSFER");
+        assertThat(persisted).containsEntry("STATUS", "PENDING");
+        assertThat(persisted.get("CHECKOUT_URL")).isNull();
+        assertThat(persisted.get("QR_CODE_CONTENT").toString()).startsWith("data:image/png;base64,");
         assertThat(persisted.get("FAILURE_CODE")).isNull();
         assertThat(persisted.get("FAILURE_REASON")).isNull();
 
@@ -503,7 +450,7 @@ class PaymentServiceApplicationTests {
                 "POST",
                 "/api/v1/payments/" + paymentId + "/attempts",
                 gatewayHeaders(UUID.randomUUID(), null),
-                "{\"method\":\"E_WALLET\",\"locale\":\"en\"}"
+                "{\"method\":\"BANK_TRANSFER\",\"locale\":\"en\"}"
         );
         assertThat(anotherUser.status()).isEqualTo(403);
         assertThat(anotherUser.body()).contains("\"code\":\"PAYMENT_ACCESS_DENIED\"");
@@ -517,14 +464,57 @@ class PaymentServiceApplicationTests {
         assertThat(cash.status()).isEqualTo(400);
         assertThat(cash.body()).contains("\"code\":\"UNSUPPORTED_PAYMENT_METHOD\"");
 
-        TestHttpResponse bankTransfer = request(
+    }
+
+    @Test
+    void bookingVietQrRequiresExplicitReceivedConfirmation() throws Exception {
+        UUID payerUserId = UUID.randomUUID();
+        UUID bookingId = UUID.randomUUID();
+        String requestBody = """
+                {
+                  "bookingId":"%s",
+                  "amount":100000,
+                  "currency":"VND",
+                  "locale":"vn"
+                }
+                """.formatted(bookingId);
+
+        TestHttpResponse checkout = request(
                 "POST",
-                "/api/v1/payments/" + paymentId + "/attempts",
+                "/internal/payments/booking-checkouts",
                 gatewayHeaders(payerUserId, null),
-                "{\"method\":\"BANK_TRANSFER\",\"locale\":\"vn\"}"
+                requestBody
         );
-        assertThat(bankTransfer.status()).isEqualTo(400);
-        assertThat(bankTransfer.body()).contains("\"code\":\"UNSUPPORTED_PAYMENT_METHOD\"");
+        assertThat(checkout.status()).isEqualTo(201);
+        JsonNode checkoutData = responseData(checkout.body());
+        UUID paymentId = UUID.fromString(checkoutData.path("paymentId").asText());
+        assertThat(checkoutData.path("status").asText()).isEqualTo("PENDING");
+        assertThat(checkoutData.path("qrCodeContent").asText())
+                .startsWith("data:image/png;base64,");
+        assertThat(jdbcTemplate.queryForObject(
+                "select status from payments where payment_id = ?",
+                String.class,
+                paymentId
+        )).isEqualTo("PENDING");
+
+        TestHttpResponse confirmed = request(
+                "POST",
+                "/internal/payments/booking-bank-transfer-confirmations",
+                gatewayHeaders(payerUserId, null),
+                requestBody
+        );
+        assertThat(confirmed.status()).isEqualTo(201);
+        assertThat(responseData(confirmed.body()).path("status").asText()).isEqualTo("SUCCEEDED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select status from payments where payment_id = ?",
+                String.class,
+                paymentId
+        )).isEqualTo("SUCCEEDED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select status from payment_attempts where payment_id = ? and provider = 'VIETQR'",
+                String.class,
+                paymentId
+        )).isEqualTo("SUCCEEDED");
     }
 
     @Test
@@ -587,7 +577,7 @@ class PaymentServiceApplicationTests {
     }
 
     @Test
-    void cashCollectionRequiresTrustedCallerAndRejectsActiveMomoAttempt() throws Exception {
+    void cashCollectionRequiresTrustedCallerAndRejectsActiveVietQrAttempt() throws Exception {
         UUID payerUserId = UUID.randomUUID();
         UUID collectorUserId = UUID.randomUUID();
         TestHttpResponse paymentResponse = request(
@@ -606,13 +596,13 @@ class PaymentServiceApplicationTests {
         );
         assertThat(untrusted.status()).isEqualTo(403);
 
-        TestHttpResponse momoAttempt = request(
+        TestHttpResponse vietQrAttempt = request(
                 "POST",
                 "/api/v1/payments/" + paymentId + "/attempts",
                 gatewayHeaders(payerUserId, null),
-                "{\"method\":\"E_WALLET\",\"locale\":\"vn\"}"
+                "{\"method\":\"BANK_TRANSFER\",\"locale\":\"vn\"}"
         );
-        assertThat(momoAttempt.status()).isEqualTo(201);
+        assertThat(vietQrAttempt.status()).isEqualTo(201);
 
         TestHttpResponse conflict = request(
                 "POST",
@@ -633,122 +623,6 @@ class PaymentServiceApplicationTests {
                 String.class,
                 paymentId
         )).isEqualTo("PENDING");
-    }
-
-    @Test
-    void momoWebhookIsVerifiedIdempotentAndSafeForOutOfOrderEvents() throws Exception {
-        UUID payerUserId = UUID.randomUUID();
-        TestHttpResponse paymentResponse = request(
-                "POST",
-                "/api/v1/payments",
-                gatewayHeaders(payerUserId, "pay-test-" + UUID.randomUUID()),
-                paymentBody("BOOKING", UUID.randomUUID(), "BOOKING_DEPOSIT", "150000", "VND")
-        );
-        UUID paymentId = extractPaymentId(paymentResponse.body());
-        TestHttpResponse attemptResponse = request(
-                "POST",
-                "/api/v1/payments/" + paymentId + "/attempts",
-                gatewayHeaders(payerUserId, null),
-                "{\"method\":\"E_WALLET\",\"locale\":\"vn\"}"
-        );
-        assertThat(attemptResponse.status()).isEqualTo(201);
-        JsonNode attempt = responseData(attemptResponse.body());
-        UUID attemptId = UUID.fromString(attempt.path("attemptId").asText());
-        long responseTime = System.currentTimeMillis();
-        long transId = 270820260001L;
-
-        String successBody = momoWebhookBody(
-                paymentId,
-                attemptId,
-                transId,
-                0,
-                "Successful.",
-                responseTime,
-                null
-        );
-        TestHttpResponse success = request(
-                "POST",
-                "/api/v1/payments/providers/momo/webhook",
-                Map.of(),
-                successBody
-        );
-        assertThat(success.status()).isEqualTo(204);
-        assertThat(jdbcTemplate.queryForObject(
-                "select status from payments where payment_id = ?",
-                String.class,
-                paymentId
-        )).isEqualTo("SUCCEEDED");
-        Map<String, Object> persistedAttempt = jdbcTemplate.queryForMap(
-                "select status, provider_transaction_id from payment_attempts where attempt_id = ?",
-                attemptId
-        );
-        assertThat(persistedAttempt).containsEntry("STATUS", "SUCCEEDED");
-        assertThat(persistedAttempt).containsEntry("PROVIDER_TRANSACTION_ID", Long.toString(transId));
-        assertThat(jdbcTemplate.queryForObject(
-                "select count(*) from provider_webhook_events where attempt_id = ? and status = 'PROCESSED'",
-                Integer.class,
-                attemptId
-        )).isEqualTo(1);
-
-        TestHttpResponse duplicate = request(
-                "POST",
-                "/api/v1/payments/providers/momo/webhook",
-                Map.of(),
-                successBody
-        );
-        assertThat(duplicate.status()).isEqualTo(204);
-        assertThat(jdbcTemplate.queryForObject(
-                "select count(*) from provider_webhook_events where attempt_id = ?",
-                Integer.class,
-                attemptId
-        )).isEqualTo(1);
-
-        String lateFailureBody = momoWebhookBody(
-                paymentId,
-                attemptId,
-                transId,
-                1006,
-                "User denied payment.",
-                responseTime + 1,
-                null
-        );
-        assertThat(request(
-                "POST",
-                "/api/v1/payments/providers/momo/webhook",
-                Map.of(),
-                lateFailureBody
-        ).status()).isEqualTo(204);
-        assertThat(jdbcTemplate.queryForObject(
-                "select count(*) from provider_webhook_events where attempt_id = ? and status = 'IGNORED'",
-                Integer.class,
-                attemptId
-        )).isEqualTo(1);
-        assertThat(jdbcTemplate.queryForObject(
-                "select status from payments where payment_id = ?",
-                String.class,
-                paymentId
-        )).isEqualTo("SUCCEEDED");
-
-        String forgedBody = momoWebhookBody(
-                paymentId,
-                attemptId,
-                transId + 1,
-                0,
-                "Successful.",
-                responseTime + 2,
-                "0".repeat(64)
-        );
-        assertThat(request(
-                "POST",
-                "/api/v1/payments/providers/momo/webhook",
-                Map.of(),
-                forgedBody
-        ).status()).isEqualTo(204);
-        assertThat(jdbcTemplate.queryForObject(
-                "select count(*) from provider_webhook_events " +
-                        "where signature_valid = false and status = 'FAILED' and attempt_id is null",
-                Integer.class
-        )).isGreaterThanOrEqualTo(1);
     }
 
     private Map<String, String> gatewayHeaders(UUID userId, String idempotencyKey) {
@@ -779,56 +653,6 @@ class PaymentServiceApplicationTests {
                 """.formatted(referenceType, referenceId, purpose, amount, currency);
     }
 
-    private String momoWebhookBody(
-            UUID paymentId,
-            UUID attemptId,
-            long transId,
-            int resultCode,
-            String message,
-            long responseTime,
-            String signatureOverride
-    ) throws Exception {
-        String reference = attemptId.toString().replace("-", "");
-        String orderInfo = "GoatSports payment " + paymentId.toString().replace("-", "");
-        String rawSignature = "accessKey=test-momo-access-key"
-                + "&amount=150000"
-                + "&extraData="
-                + "&message=" + message
-                + "&orderId=" + reference
-                + "&orderInfo=" + orderInfo
-                + "&orderType=momo_wallet"
-                + "&partnerCode=MOMO_TEST"
-                + "&payType=qr"
-                + "&requestId=" + reference
-                + "&responseTime=" + responseTime
-                + "&resultCode=" + resultCode
-                + "&transId=" + transId;
-        String signature = signatureOverride == null
-                ? hmacSha256("test-momo-secret-key", rawSignature)
-                : signatureOverride;
-        return objectMapper.writeValueAsString(Map.ofEntries(
-                Map.entry("partnerCode", "MOMO_TEST"),
-                Map.entry("orderId", reference),
-                Map.entry("requestId", reference),
-                Map.entry("amount", 150000L),
-                Map.entry("orderInfo", orderInfo),
-                Map.entry("orderType", "momo_wallet"),
-                Map.entry("transId", transId),
-                Map.entry("resultCode", resultCode),
-                Map.entry("message", message),
-                Map.entry("payType", "qr"),
-                Map.entry("responseTime", responseTime),
-                Map.entry("extraData", ""),
-                Map.entry("signature", signature)
-        ));
-    }
-
-    private String hmacSha256(String secret, String data) throws Exception {
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-        return HexFormat.of().formatHex(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
-    }
-
     private UUID extractPaymentId(String body) {
         var matcher = PAYMENT_ID_PATTERN.matcher(body);
         assertThat(matcher.find()).as("payment id is present in response").isTrue();
@@ -837,13 +661,6 @@ class PaymentServiceApplicationTests {
 
     private JsonNode responseData(String body) throws Exception {
         return objectMapper.readTree(body).path("data");
-    }
-
-    private void assertValidMomoCheckoutUrl(String checkoutUrl, String attemptId) {
-        URI uri = URI.create(checkoutUrl);
-        assertThat(uri.getScheme()).isEqualTo("https");
-        assertThat(uri.getHost()).isEqualTo("test-payment.momo.vn");
-        assertThat(uri.getRawQuery()).isEqualTo("orderId=" + attemptId.replace("-", ""));
     }
 
     private Map<String, Class<?>> declaredFields(Class<?> type) {
@@ -894,23 +711,11 @@ class PaymentServiceApplicationTests {
             return command -> {
                 String token = command.getAttemptId().toString().replace("-", "");
                 return new iuh.fit.paymentservice.application.dto.response.attempt.ProviderCheckoutResult(
-                        "https://test-payment.momo.vn/v2/gateway/pay?orderId=" + token,
-                        "momo://app?action=payWithApp&sid=" + token,
-                        "momo://app?action=payWithApp&isScanQR=true&sid=" + token
+                        null,
+                        null,
+                        "data:image/png;base64," + token
                 );
             };
-        }
-
-        @Bean
-        @Primary
-        iuh.fit.paymentservice.application.port.client.ProviderTransactionQueryPort providerTransactionQueryPort() {
-            return command -> iuh.fit.paymentservice.application.dto.response.webhook.ProviderTransactionStatus
-                    .builder()
-                    .amount(java.math.BigDecimal.valueOf(command.getExpectedAmount()).longValueExact())
-                    .resultCode(1000)
-                    .message("Transaction is being processed")
-                    .occurredAt(LocalDateTime.now())
-                    .build();
         }
     }
 }

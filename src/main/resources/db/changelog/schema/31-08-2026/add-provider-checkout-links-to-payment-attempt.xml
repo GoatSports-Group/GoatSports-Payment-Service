@@ -4,7 +4,12 @@
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd">
-    <changeSet id="20260831-01-add-momo-direct-links" author="codex">
+    <changeSet id="20260831-02-add-provider-checkout-links" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="payment_attempts" columnName="deeplink"/>
+            </not>
+        </preConditions>
         <addColumn tableName="payment_attempts">
             <column name="deeplink" type="TEXT"/>
             <column name="qr_code_content" type="TEXT"/>

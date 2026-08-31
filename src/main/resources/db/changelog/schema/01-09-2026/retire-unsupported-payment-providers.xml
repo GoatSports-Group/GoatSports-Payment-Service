@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd">
+    <changeSet id="20260901-01-retire-unsupported-payment-providers" author="codex">
+        <sql>
+            UPDATE payment_attempts
+            SET provider = 'MANUAL',
+                status = 'FAILED',
+                failure_code = 'PAYMENT_PROVIDER_RETIRED',
+                failure_reason = 'The previous payment provider is no longer supported',
+                completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP)
+            WHERE provider NOT IN ('VIETQR', 'MANUAL')
+              AND status IN ('CREATED', 'REDIRECT_READY', 'PENDING');
+
+            UPDATE payment_attempts
+            SET provider = 'MANUAL'
+            WHERE provider NOT IN ('VIETQR', 'MANUAL');
+
+            UPDATE payment_attempts
+            SET method = 'BANK_TRANSFER'
+            WHERE method NOT IN ('BANK_TRANSFER', 'CASH');
+        </sql>
+    </changeSet>
+</databaseChangeLog>

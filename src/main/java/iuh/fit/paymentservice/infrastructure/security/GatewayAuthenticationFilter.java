@@ -30,9 +30,7 @@ public class GatewayAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return request.getRequestURI().startsWith("/actuator/")
-                || ("POST".equalsIgnoreCase(request.getMethod())
-                && "/api/v1/payments/providers/momo/webhook".equals(request.getRequestURI()));
+        return request.getRequestURI().startsWith("/actuator/");
     }
 
     @Override
