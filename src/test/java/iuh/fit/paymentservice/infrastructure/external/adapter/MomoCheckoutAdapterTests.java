@@ -44,6 +44,7 @@ class MomoCheckoutAdapterTests {
         String orderInfo = "GoatSports payment 123";
         String rawSignature = adapter.rawRequestSignature(150_000L, orderId, orderInfo, orderId);
         String signature = adapter.hmacSha256(properties.getSecretKey(), rawSignature);
+        String responseSignature = responseSignature(orderId, "Successful.");
 
         server.expect(requestTo(API_URL))
                 .andExpect(method(HttpMethod.POST))
@@ -75,13 +76,38 @@ class MomoCheckoutAdapterTests {
                           "responseTime":1787840000000,
                           "message":"Successful.",
                           "resultCode":0,
-                          "payUrl":"%s"
+                          "payUrl":"%s",
+                          "signature":"%s"
                         }
-                        """.formatted(orderId, orderId, PAY_URL), MediaType.APPLICATION_JSON));
+                        """.formatted(orderId, orderId, PAY_URL, responseSignature), MediaType.APPLICATION_JSON));
 
         String checkoutUrl = adapter.createCheckoutUrl(command(orderInfo));
 
         assertThat(checkoutUrl).isEqualTo(PAY_URL);
+        server.verify();
+    }
+
+    @Test
+    void rejectsProviderResponseWithInvalidSignature() {
+        String orderId = ATTEMPT_ID.toString().replace("-", "");
+        server.expect(requestTo(API_URL))
+                .andRespond(withSuccess("""
+                        {
+                          "partnerCode":"MOMO_TEST",
+                          "requestId":"%s",
+                          "orderId":"%s",
+                          "amount":150000,
+                          "responseTime":1787840000000,
+                          "message":"Successful.",
+                          "resultCode":0,
+                          "payUrl":"%s",
+                          "signature":"%s"
+                        }
+                        """.formatted(orderId, orderId, PAY_URL, "0".repeat(64)), MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> adapter.createCheckoutUrl(command("GoatSports payment 123")))
+                .isInstanceOf(PaymentProviderException.class)
+                .hasMessage("Chữ ký response từ MoMo không hợp lệ");
         server.verify();
     }
 
@@ -135,5 +161,18 @@ class MomoCheckoutAdapterTests {
         value.setRequestType("captureWallet");
         value.setTimeoutSeconds(30);
         return value;
+    }
+
+    private String responseSignature(String orderId, String message) {
+        String rawSignature = "accessKey=" + properties.getAccessKey()
+                + "&amount=150000"
+                + "&message=" + message
+                + "&orderId=" + orderId
+                + "&partnerCode=" + properties.getPartnerCode()
+                + "&payUrl=" + PAY_URL
+                + "&requestId=" + orderId
+                + "&responseTime=1787840000000"
+                + "&resultCode=0";
+        return adapter.hmacSha256(properties.getSecretKey(), rawSignature);
     }
 }

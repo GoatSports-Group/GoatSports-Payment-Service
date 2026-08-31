@@ -13,16 +13,10 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.time.Duration;
-import java.util.HexFormat;
 
 @Component
 public class MomoCheckoutAdapter implements PaymentCheckoutPort {
@@ -31,15 +25,29 @@ public class MomoCheckoutAdapter implements PaymentCheckoutPort {
     private static final String EMPTY_EXTRA_DATA = "";
 
     private final MomoProperties properties;
+    private final MomoSignatureService signatureService;
     private final RestClient restClient;
 
     @Autowired
-    public MomoCheckoutAdapter(MomoProperties properties) {
-        this(properties, RestClient.builder().requestFactory(requestFactory(properties)).build());
+    public MomoCheckoutAdapter(MomoProperties properties, MomoSignatureService signatureService) {
+        this(
+                properties,
+                signatureService,
+                RestClient.builder().requestFactory(requestFactory(properties)).build()
+        );
     }
 
     MomoCheckoutAdapter(MomoProperties properties, RestClient restClient) {
+        this(properties, new MomoSignatureService(), restClient);
+    }
+
+    MomoCheckoutAdapter(
+            MomoProperties properties,
+            MomoSignatureService signatureService,
+            RestClient restClient
+    ) {
         this.properties = properties;
+        this.signatureService = signatureService;
         this.restClient = restClient;
     }
 
@@ -92,17 +100,7 @@ public class MomoCheckoutAdapter implements PaymentCheckoutPort {
     }
 
     String hmacSha256(String secret, String data) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            return HexFormat.of().formatHex(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
-        } catch (GeneralSecurityException exception) {
-            throw new PaymentProviderException(
-                    "MOMO_SIGNATURE_ERROR",
-                    "Không thể ký yêu cầu thanh toán MoMo",
-                    exception
-            );
-        }
+        return signatureService.hmacSha256(secret, data);
     }
 
     private MomoCreatePaymentResponse send(MomoCreatePaymentRequest request) {
@@ -173,24 +171,25 @@ public class MomoCheckoutAdapter implements PaymentCheckoutPort {
         if (response.signature() == null || response.signature().isBlank()) {
             return;
         }
-        String rawSignature = "accessKey=" + properties.getAccessKey()
+        String expected = hmacSha256(properties.getSecretKey(), rawResponseSignature(response));
+        if (!signatureService.matches(expected, response.signature())) {
+            throw new PaymentProviderException(
+                    "MOMO_INVALID_RESPONSE_SIGNATURE",
+                    "Chữ ký response từ MoMo không hợp lệ"
+            );
+        }
+    }
+
+    private String rawResponseSignature(MomoCreatePaymentResponse response) {
+        return "accessKey=" + properties.getAccessKey()
                 + "&amount=" + response.amount()
+                + "&message=" + response.message()
                 + "&orderId=" + response.orderId()
                 + "&partnerCode=" + response.partnerCode()
                 + "&payUrl=" + response.payUrl()
                 + "&requestId=" + response.requestId()
                 + "&responseTime=" + response.responseTime()
                 + "&resultCode=" + response.resultCode();
-        String expected = hmacSha256(properties.getSecretKey(), rawSignature);
-        if (!MessageDigest.isEqual(
-                expected.getBytes(StandardCharsets.US_ASCII),
-                response.signature().getBytes(StandardCharsets.US_ASCII)
-        )) {
-            throw new PaymentProviderException(
-                    "MOMO_INVALID_RESPONSE_SIGNATURE",
-                    "Chữ ký response từ MoMo không hợp lệ"
-            );
-        }
     }
 
     private long providerAmount(Double amount) {
