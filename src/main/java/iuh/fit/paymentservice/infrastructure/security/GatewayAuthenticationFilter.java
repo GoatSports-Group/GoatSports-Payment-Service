@@ -22,6 +22,8 @@ import java.util.List;
 @Component
 public class GatewayAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final String PAYOS_WEBHOOK_PATH = "/api/v1/payments/providers/payos/webhook";
+
     private final byte[] gatewaySecret;
 
     public GatewayAuthenticationFilter(@Value("${app.gateway.secret}") String gatewaySecret) {
@@ -30,7 +32,9 @@ public class GatewayAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return request.getRequestURI().startsWith("/actuator/");
+        return request.getRequestURI().startsWith("/actuator/")
+                || ("POST".equalsIgnoreCase(request.getMethod())
+                && PAYOS_WEBHOOK_PATH.equals(request.getRequestURI()));
     }
 
     @Override

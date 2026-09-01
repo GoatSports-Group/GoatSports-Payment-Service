@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd">
+    <changeSet id="20260901-02-retire-vietqr-attempts" author="codex">
+        <sql>
+            UPDATE payment_attempts
+            SET provider = 'MANUAL',
+                status = 'FAILED',
+                failure_code = 'PAYMENT_PROVIDER_RETIRED',
+                failure_reason = 'VietQR manual confirmation has been replaced by payOS',
+                completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP)
+            WHERE provider = 'VIETQR'
+              AND status IN ('CREATED', 'REDIRECT_READY', 'PENDING');
+
+            UPDATE payment_attempts
+            SET provider = 'MANUAL'
+            WHERE provider = 'VIETQR';
+        </sql>
+    </changeSet>
+
+    <changeSet id="20260901-03-create-provider-webhook-events" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="provider_webhook_events"/>
+            </not>
+        </preConditions>
+        <createTable tableName="provider_webhook_events">
+            <column name="webhook_event_id" type="UUID">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_provider_webhook_events"/>
+            </column>
+            <column name="attempt_id" type="UUID">
+                <constraints nullable="true"
+                             foreignKeyName="fk_provider_webhook_events_attempt"
+                             referencedTableName="payment_attempts"
+                             referencedColumnNames="attempt_id"/>
+            </column>
+            <column name="provider" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_event_id" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload_hash" type="CHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="signature_valid" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="received_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="processed_at" type="TIMESTAMP"/>
+            <column name="failure_reason" type="VARCHAR(500)"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint
+                tableName="provider_webhook_events"
+                columnNames="provider, provider_event_id"
+                constraintName="uq_provider_webhook_events_provider_event"/>
+        <createIndex tableName="provider_webhook_events" indexName="idx_provider_webhook_events_attempt_received">
+            <column name="attempt_id"/>
+            <column name="received_at" descending="true"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260901-04-index-payos-payment-link" author="codex">
+        <createIndex tableName="payment_attempts" indexName="idx_payment_attempts_provider_transaction">
+            <column name="provider"/>
+            <column name="provider_transaction_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

@@ -2,8 +2,6 @@ package iuh.fit.paymentservice.presentation.controller.internal;
 
 import iuh.fit.paymentservice.application.dto.request.payment.CreateBookingCheckoutCommand;
 import iuh.fit.paymentservice.application.dto.response.payment.BookingCheckoutResult;
-import iuh.fit.paymentservice.presentation.converter.PaymentConverter;
-import iuh.fit.paymentservice.presentation.response.PaymentResponse;
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.port.security.CurrentUserProvider;
 import iuh.fit.paymentservice.application.service.BookingCheckoutService;
@@ -26,7 +24,6 @@ import java.util.UUID;
 public class BookingCheckoutInternalController {
     private final BookingCheckoutService bookingCheckoutService;
     private final CurrentUserProvider currentUserProvider;
-    private final PaymentConverter paymentConverter;
 
     @PostMapping("/booking-checkouts")
     public ResponseEntity<BookingCheckoutResult> create(
@@ -38,19 +35,6 @@ public class BookingCheckoutInternalController {
                 request.getCurrency(), request.getLocale(), clientIp(servletRequest)
         ));
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
-    }
-
-    @PostMapping("/booking-bank-transfer-confirmations")
-    public ResponseEntity<PaymentResponse> confirmReceived(
-            @Valid @RequestBody CreateBookingCheckoutRequest request,
-            HttpServletRequest servletRequest
-    ) {
-        UUID userId = authenticatedPayerId();
-        var payment = bookingCheckoutService.confirmReceived(new CreateBookingCheckoutCommand(
-                userId, request.getBookingId(), request.getAmount(),
-                request.getCurrency(), request.getLocale(), clientIp(servletRequest)
-        ), userId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(paymentConverter.toResponse(payment));
     }
 
     private UUID authenticatedPayerId() {

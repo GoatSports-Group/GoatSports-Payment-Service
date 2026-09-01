@@ -79,7 +79,7 @@ class RefundIntegrationTests {
 
     @Test
     void partialThenFullRefundRequestsRemainManualAndIdempotentReplayDoesNotDuplicate() throws Exception {
-        UUID paymentId = createSucceededPayment("VIETQR", "BANK_TRANSFER", 100_000D);
+        UUID paymentId = createSucceededPayment("PAYOS", "BANK_TRANSFER", 100_000D);
         UUID requesterId = UUID.randomUUID();
         String firstKey = "refund-" + UUID.randomUUID();
 
@@ -107,7 +107,7 @@ class RefundIntegrationTests {
 
     @Test
     void refundCannotExceedUnreservedPaymentAmount() throws Exception {
-        UUID paymentId = createSucceededPayment("VIETQR", "BANK_TRANSFER", 100_000D);
+        UUID paymentId = createSucceededPayment("PAYOS", "BANK_TRANSFER", 100_000D);
         UUID requesterId = UUID.randomUUID();
         assertThat(refund(paymentId, requesterId, "refund-" + UUID.randomUUID(),
                 40_000, "Refund lần một").status()).isEqualTo(201);
@@ -121,7 +121,7 @@ class RefundIntegrationTests {
 
     @Test
     void idempotencyKeyCannotBeReusedWithDifferentRefundPayload() throws Exception {
-        UUID paymentId = createSucceededPayment("VIETQR", "BANK_TRANSFER", 100_000D);
+        UUID paymentId = createSucceededPayment("PAYOS", "BANK_TRANSFER", 100_000D);
         UUID requesterId = UUID.randomUUID();
         String key = "refund-" + UUID.randomUUID();
         assertThat(refund(paymentId, requesterId, key, 40_000, "Lý do A").status()).isEqualTo(201);
@@ -149,7 +149,7 @@ class RefundIntegrationTests {
 
     @Test
     void concurrentSameIdempotencyKeyCreatesOneManualRefund() throws Exception {
-        UUID paymentId = createSucceededPayment("VIETQR", "BANK_TRANSFER", 100_000D);
+        UUID paymentId = createSucceededPayment("PAYOS", "BANK_TRANSFER", 100_000D);
         UUID requesterId = UUID.randomUUID();
         String key = "refund-race-" + UUID.randomUUID();
         CountDownLatch ready = new CountDownLatch(2);

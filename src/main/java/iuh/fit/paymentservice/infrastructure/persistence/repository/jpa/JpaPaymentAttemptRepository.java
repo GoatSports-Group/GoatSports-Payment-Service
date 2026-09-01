@@ -23,6 +23,14 @@ public interface JpaPaymentAttemptRepository extends JpaRepository<PaymentAttemp
     @Query("select attempt from PaymentAttemptEntity attempt where attempt.attemptId = :attemptId")
     Optional<PaymentAttemptEntity> findByIdForUpdate(UUID attemptId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select attempt from PaymentAttemptEntity attempt "
+            + "where attempt.provider = :provider and attempt.providerTransactionId = :providerTransactionId")
+    Optional<PaymentAttemptEntity> findByProviderAndProviderTransactionIdForUpdate(
+            PaymentProvider provider,
+            String providerTransactionId
+    );
+
     Optional<PaymentAttemptEntity> findFirstByPaymentIdAndStatusInOrderByCreatedAtDesc(
             UUID paymentId,
             Collection<PaymentAttemptStatus> statuses

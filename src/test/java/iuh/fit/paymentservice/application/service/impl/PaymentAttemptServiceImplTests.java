@@ -50,25 +50,25 @@ class PaymentAttemptServiceImplTests {
                 .thenReturn(Optional.empty());
         saveAttemptsWithGeneratedIds();
         when(paymentCheckoutPort.createCheckout(any())).thenThrow(new PaymentProviderException(
-                "VIETQR_CONNECTION_ERROR", "Không thể kết nối tới VietQR"
+                "PAYOS_CONNECTION_ERROR", "Không thể kết nối tới payOS"
         ));
 
         assertThatThrownBy(() -> paymentAttemptService.createPaymentAttempt(command(paymentId, payerId)))
                 .isInstanceOf(PaymentProviderException.class)
-                .hasMessage("Không thể kết nối tới VietQR");
+                .hasMessage("Không thể kết nối tới payOS");
 
         ArgumentCaptor<PaymentAttempt> captor = ArgumentCaptor.forClass(PaymentAttempt.class);
         verify(paymentAttemptRepository, times(2)).save(captor.capture());
         PaymentAttempt failed = captor.getAllValues().getLast();
-        assertThat(failed.getProvider()).isEqualTo(PaymentProvider.VIETQR);
+        assertThat(failed.getProvider()).isEqualTo(PaymentProvider.PAYOS);
         assertThat(failed.getMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
         assertThat(failed.getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
-        assertThat(failed.getFailureCode()).isEqualTo("VIETQR_CONNECTION_ERROR");
+        assertThat(failed.getFailureCode()).isEqualTo("PAYOS_CONNECTION_ERROR");
         verify(paymentRepository, never()).save(any());
     }
 
     @Test
-    void activeAttemptWithDifferentMethodBlocksVietQrCreation() {
+    void activeAttemptWithDifferentMethodBlocksPayOsCreation() {
         UUID paymentId = UUID.randomUUID();
         UUID payerId = UUID.randomUUID();
         Payment payment = payment(paymentId, payerId, PaymentStatus.PENDING);
@@ -91,14 +91,14 @@ class PaymentAttemptServiceImplTests {
     }
 
     @Test
-    void activeVietQrAttemptIsReusedWithoutCallingProviderAgain() {
+    void activePayOsAttemptIsReusedWithoutCallingProviderAgain() {
         UUID paymentId = UUID.randomUUID();
         UUID payerId = UUID.randomUUID();
         Payment payment = payment(paymentId, payerId, PaymentStatus.PENDING);
         PaymentAttempt active = PaymentAttempt.builder()
                 .attemptId(UUID.randomUUID())
                 .paymentId(paymentId)
-                .provider(PaymentProvider.VIETQR)
+                .provider(PaymentProvider.PAYOS)
                 .method(PaymentMethod.BANK_TRANSFER)
                 .qrCodeContent("data:image/png;base64,TEST")
                 .status(PaymentAttemptStatus.PENDING)

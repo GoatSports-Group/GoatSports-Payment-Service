@@ -13,6 +13,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class ProviderCheckoutCommand {
     private UUID attemptId;
+    private Long orderCode;
     private Double amount;
     private String currency;
     private String orderInfo;

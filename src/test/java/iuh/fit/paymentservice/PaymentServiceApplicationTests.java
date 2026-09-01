@@ -2,6 +2,7 @@ package iuh.fit.paymentservice;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import iuh.fit.paymentservice.application.dto.response.webhook.ProviderCheckoutResult;
 import iuh.fit.paymentservice.domain.entity.BaseEntity;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
@@ -68,7 +69,7 @@ class PaymentServiceApplicationTests {
                 Integer.class
         );
 
-        assertThat(changeCount).isEqualTo(5);
+        assertThat(changeCount).isEqualTo(8);
 
         List<String> paymentColumns = jdbcTemplate.queryForList(
                 "select column_name from information_schema.columns " +
@@ -146,7 +147,7 @@ class PaymentServiceApplicationTests {
                 "CASH"
         );
         assertThat(Arrays.stream(PaymentProvider.values()).map(Enum::name)).containsExactly(
-                "VIETQR",
+                "PAYOS",
                 "MANUAL"
         );
         assertThat(Arrays.stream(PaymentAttemptStatus.values()).map(Enum::name)).containsExactly(
@@ -367,7 +368,7 @@ class PaymentServiceApplicationTests {
     }
 
     @Test
-    void createVietQrCheckoutIsPersistedAndReplaySafe() throws Exception {
+    void createPayOsCheckoutIsPersistedAndReplaySafe() throws Exception {
         UUID payerUserId = UUID.randomUUID();
         TestHttpResponse paymentResponse = request(
                 "POST",
@@ -396,10 +397,10 @@ class PaymentServiceApplicationTests {
         );
         assertThat(created.status()).isEqualTo(201);
         JsonNode createdAttempt = responseData(created.body());
-        assertThat(createdAttempt.path("provider").asText()).isEqualTo("VIETQR");
+        assertThat(createdAttempt.path("provider").asText()).isEqualTo("PAYOS");
         assertThat(createdAttempt.path("method").asText()).isEqualTo("BANK_TRANSFER");
         assertThat(createdAttempt.path("status").asText()).isEqualTo("PENDING");
-        assertThat(createdAttempt.path("providerTransactionId").isNull()).isTrue();
+        assertThat(createdAttempt.path("providerTransactionId").asText()).startsWith("payos-link-");
         assertThat(createdAttempt.path("checkoutUrl").isNull()).isTrue();
         assertThat(createdAttempt.path("qrCodeContent").asText())
                 .startsWith("data:image/png;base64,");
@@ -409,7 +410,7 @@ class PaymentServiceApplicationTests {
                         "from payment_attempts where attempt_id = ?",
                 UUID.fromString(createdAttempt.path("attemptId").asText())
         );
-        assertThat(persisted).containsEntry("PROVIDER", "VIETQR");
+        assertThat(persisted).containsEntry("PROVIDER", "PAYOS");
         assertThat(persisted).containsEntry("METHOD", "BANK_TRANSFER");
         assertThat(persisted).containsEntry("STATUS", "PENDING");
         assertThat(persisted.get("CHECKOUT_URL")).isNull();
@@ -467,7 +468,7 @@ class PaymentServiceApplicationTests {
     }
 
     @Test
-    void bookingVietQrRequiresExplicitReceivedConfirmation() throws Exception {
+    void bookingPayOsRemainsPendingUntilSignedWebhook() throws Exception {
         UUID payerUserId = UUID.randomUUID();
         UUID bookingId = UUID.randomUUID();
         String requestBody = """
@@ -497,24 +498,16 @@ class PaymentServiceApplicationTests {
                 paymentId
         )).isEqualTo("PENDING");
 
-        TestHttpResponse confirmed = request(
-                "POST",
-                "/internal/payments/booking-bank-transfer-confirmations",
-                gatewayHeaders(payerUserId, null),
-                requestBody
-        );
-        assertThat(confirmed.status()).isEqualTo(201);
-        assertThat(responseData(confirmed.body()).path("status").asText()).isEqualTo("SUCCEEDED");
         assertThat(jdbcTemplate.queryForObject(
                 "select status from payments where payment_id = ?",
                 String.class,
                 paymentId
-        )).isEqualTo("SUCCEEDED");
+        )).isEqualTo("PENDING");
         assertThat(jdbcTemplate.queryForObject(
-                "select status from payment_attempts where payment_id = ? and provider = 'VIETQR'",
+                "select status from payment_attempts where payment_id = ? and provider = 'PAYOS'",
                 String.class,
                 paymentId
-        )).isEqualTo("SUCCEEDED");
+        )).isEqualTo("PENDING");
     }
 
     @Test
@@ -577,7 +570,7 @@ class PaymentServiceApplicationTests {
     }
 
     @Test
-    void cashCollectionRequiresTrustedCallerAndRejectsActiveVietQrAttempt() throws Exception {
+    void cashCollectionRequiresTrustedCallerAndRejectsActivePayOsAttempt() throws Exception {
         UUID payerUserId = UUID.randomUUID();
         UUID collectorUserId = UUID.randomUUID();
         TestHttpResponse paymentResponse = request(
@@ -596,13 +589,13 @@ class PaymentServiceApplicationTests {
         );
         assertThat(untrusted.status()).isEqualTo(403);
 
-        TestHttpResponse vietQrAttempt = request(
+        TestHttpResponse payOsAttempt = request(
                 "POST",
                 "/api/v1/payments/" + paymentId + "/attempts",
                 gatewayHeaders(payerUserId, null),
                 "{\"method\":\"BANK_TRANSFER\",\"locale\":\"vn\"}"
         );
-        assertThat(vietQrAttempt.status()).isEqualTo(201);
+        assertThat(payOsAttempt.status()).isEqualTo(201);
 
         TestHttpResponse conflict = request(
                 "POST",
@@ -710,10 +703,11 @@ class PaymentServiceApplicationTests {
         PaymentCheckoutPort paymentCheckoutPort() {
             return command -> {
                 String token = command.getAttemptId().toString().replace("-", "");
-                return new iuh.fit.paymentservice.application.dto.response.attempt.ProviderCheckoutResult(
+                return new ProviderCheckoutResult(
                         null,
                         null,
-                        "data:image/png;base64," + token
+                        "data:image/png;base64," + token,
+                        "payos-link-" + token
                 );
             };
         }

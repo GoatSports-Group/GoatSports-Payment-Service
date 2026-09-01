@@ -3,7 +3,7 @@ package iuh.fit.paymentservice.application.service.impl;
 import iuh.fit.paymentservice.application.dto.request.attempt.CreatePaymentAttemptCommand;
 import iuh.fit.paymentservice.application.dto.request.webhook.ProviderCheckoutCommand;
 import iuh.fit.paymentservice.application.dto.response.attempt.CreatePaymentAttemptResult;
-import iuh.fit.paymentservice.application.dto.response.attempt.ProviderCheckoutResult;
+import iuh.fit.paymentservice.application.dto.response.webhook.ProviderCheckoutResult;
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.exception.PaymentAccessDeniedException;
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
@@ -55,7 +55,7 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
         );
         if (activeAttempt.isPresent()) {
             PaymentAttempt existing = activeAttempt.get();
-            if (existing.getProvider() == PaymentProvider.VIETQR
+            if (existing.getProvider() == PaymentProvider.PAYOS
                     && existing.getMethod() == PaymentMethod.BANK_TRANSFER) {
                 return result(existing, true);
             }
@@ -67,7 +67,7 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
 
         PaymentAttempt paymentAttempt = paymentAttemptRepository.save(PaymentAttempt.builder()
                 .paymentId(payment.getPaymentId())
-                .provider(PaymentProvider.VIETQR)
+                .provider(PaymentProvider.PAYOS)
                 .method(PaymentMethod.BANK_TRANSFER)
                 .status(PaymentAttemptStatus.CREATED)
                 .initiatedAt(now)
@@ -88,6 +88,7 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
             checkout = paymentCheckoutPort.createCheckout(
                     ProviderCheckoutCommand.builder()
                             .attemptId(paymentAttempt.getAttemptId())
+                            .orderCode(providerOrderCode(paymentAttempt.getAttemptId()))
                             .amount(payment.getAmount())
                             .currency(payment.getCurrency())
                             .orderInfo("GoatSports payment "
@@ -104,8 +105,8 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
             throw exception;
         } catch (RuntimeException exception) {
             PaymentProviderException providerException = new PaymentProviderException(
-                    "VIETQR_CHECKOUT_ERROR",
-                    "Không thể tạo mã thanh toán VietQR",
+                    "PAYOS_CHECKOUT_ERROR",
+                    "Không thể tạo mã thanh toán payOS",
                     exception
             );
             markFailed(paymentAttempt, providerException.getCode(), providerException.getMessage());
@@ -115,6 +116,7 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
         paymentAttempt.setCheckoutUrl(checkout.checkoutUrl());
         paymentAttempt.setDeeplink(checkout.deeplink());
         paymentAttempt.setQrCodeContent(checkout.qrCodeContent());
+        paymentAttempt.setProviderTransactionId(checkout.providerTransactionId());
         paymentAttempt.setStatus(PaymentAttemptStatus.PENDING);
         paymentAttempt.setFailureCode(null);
         paymentAttempt.setFailureReason(null);
@@ -136,14 +138,14 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
         if (command.getMethod() != PaymentMethod.BANK_TRANSFER) {
             throw new InvalidPaymentException(
                     "UNSUPPORTED_PAYMENT_METHOD",
-                    "VietQR chỉ hỗ trợ phương thức BANK_TRANSFER"
+                    "payOS chỉ hỗ trợ phương thức BANK_TRANSFER"
             );
         }
         if (command.getIpAddress() == null
                 || command.getIpAddress().isBlank()
                 || command.getIpAddress().length() > 45) {
             throw new InvalidPaymentException(
-                    "VIETQR_INVALID_IP_ADDRESS",
+                    "PAYOS_INVALID_IP_ADDRESS",
                     "Địa chỉ IP thanh toán không hợp lệ"
             );
         }
@@ -162,15 +164,20 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
                 && payment.getStatus() != PaymentStatus.FAILED) {
             throw new PaymentConflictException(
                     "PAYMENT_NOT_PAYABLE",
-                    "Trạng thái payment hiện tại không cho phép tạo mã VietQR"
+                    "Trạng thái payment hiện tại không cho phép tạo mã payOS"
             );
         }
         if (payment.getExpiresAt() != null && !payment.getExpiresAt().isAfter(now)) {
             throw new PaymentConflictException("PAYMENT_EXPIRED", "Payment đã hết hạn");
         }
         if (!"VND".equals(payment.getCurrency())) {
-            throw new InvalidPaymentException("UNSUPPORTED_CURRENCY", "VietQR hiện chỉ hỗ trợ VND");
+            throw new InvalidPaymentException("UNSUPPORTED_CURRENCY", "payOS hiện chỉ hỗ trợ VND");
         }
+    }
+
+    static long providerOrderCode(java.util.UUID attemptId) {
+        long mixed = attemptId.getMostSignificantBits() ^ attemptId.getLeastSignificantBits();
+        return Math.floorMod(mixed, 8_000_000_000_000_000L) + 1_000_000_000_000_000L;
     }
 
     private void markFailed(PaymentAttempt paymentAttempt, String code, String reason) {

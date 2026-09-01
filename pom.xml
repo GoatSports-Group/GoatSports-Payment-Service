@@ -86,6 +86,16 @@
             <artifactId>shared-kernel</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
+        <dependency>
+            <groupId>vn.payos</groupId>
+            <artifactId>payos-java</artifactId>
+            <version>2.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>3.5.3</version>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

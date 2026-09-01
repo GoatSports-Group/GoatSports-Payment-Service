@@ -15,12 +15,14 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(PaymentApplicationException.class)
@@ -45,8 +47,8 @@ public class GlobalExceptionHandler {
     }
 
     private boolean isConfigurationError(PaymentProviderException exception) {
-        return "VIETQR_DISABLED".equals(exception.getCode())
-                || "VIETQR_CONFIGURATION_ERROR".equals(exception.getCode());
+        return "PAYOS_DISABLED".equals(exception.getCode())
+                || "PAYOS_CONFIGURATION_ERROR".equals(exception.getCode());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -96,6 +98,7 @@ public class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
+        log.error("Unhandled exception while processing {} {}", request.getMethod(), request.getRequestURI(), exception);
         return error(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "INTERNAL_ERROR",

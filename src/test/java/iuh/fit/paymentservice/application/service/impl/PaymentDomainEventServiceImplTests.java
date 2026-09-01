@@ -52,9 +52,9 @@ class PaymentDomainEventServiceImplTests {
         PaymentAttempt attempt = PaymentAttempt.builder()
                 .attemptId(UUID.randomUUID())
                 .paymentId(paymentId)
-                .provider(PaymentProvider.VIETQR)
+                .provider(PaymentProvider.PAYOS)
                 .method(PaymentMethod.BANK_TRANSFER)
-                .providerTransactionId("vietqr-transaction")
+                .providerTransactionId("payos-transaction")
                 .status(status == PaymentStatus.SUCCEEDED
                         ? PaymentAttemptStatus.SUCCEEDED
                         : PaymentAttemptStatus.FAILED)
@@ -79,7 +79,7 @@ class PaymentDomainEventServiceImplTests {
         PaymentEventPayload payload = (PaymentEventPayload) event.getPayload();
         assertThat(payload.paymentId()).isEqualTo(paymentId);
         assertThat(payload.status()).isEqualTo(status);
-        assertThat(payload.provider()).isEqualTo(PaymentProvider.VIETQR);
+        assertThat(payload.provider()).isEqualTo(PaymentProvider.PAYOS);
         verify(eventPublisherPort).publish(event);
     }
 

@@ -42,6 +42,18 @@ public class PaymentAttemptRepositoryImpl implements PaymentAttemptRepository {
     }
 
     @Override
+    public Optional<PaymentAttempt> findByProviderAndProviderTransactionIdForUpdate(
+            PaymentProvider provider,
+            String providerTransactionId
+    ) {
+        return jpaPaymentAttemptRepository.findByProviderAndProviderTransactionIdForUpdate(
+                        provider,
+                        providerTransactionId
+                )
+                .map(paymentAttemptEntityMapper::toDomain);
+    }
+
+    @Override
     public Optional<PaymentAttempt> findLatestByPaymentIdAndStatuses(
             UUID paymentId,
             Collection<PaymentAttemptStatus> statuses

@@ -18,6 +18,11 @@ public interface PaymentAttemptRepository {
 
     Optional<PaymentAttempt> findByIdForUpdate(UUID attemptId);
 
+    Optional<PaymentAttempt> findByProviderAndProviderTransactionIdForUpdate(
+            PaymentProvider provider,
+            String providerTransactionId
+    );
+
     Optional<PaymentAttempt> findLatestByPaymentIdAndStatuses(
             UUID paymentId,
             Collection<PaymentAttemptStatus> statuses
