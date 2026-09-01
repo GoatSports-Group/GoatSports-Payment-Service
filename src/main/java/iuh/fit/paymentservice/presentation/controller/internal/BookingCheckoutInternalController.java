@@ -32,7 +32,8 @@ public class BookingCheckoutInternalController {
     ) {
         BookingCheckoutResult result = bookingCheckoutService.create(new CreateBookingCheckoutCommand(
                 authenticatedPayerId(), request.getBookingId(), request.getAmount(),
-                request.getCurrency(), request.getLocale(), clientIp(servletRequest)
+                request.getCurrency(), request.getLocale(), clientIp(servletRequest),
+                request.getExpiresAt()
         ));
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }

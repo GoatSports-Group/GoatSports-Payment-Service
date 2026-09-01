@@ -476,7 +476,8 @@ class PaymentServiceApplicationTests {
                   "bookingId":"%s",
                   "amount":100000,
                   "currency":"VND",
-                  "locale":"vn"
+                  "locale":"vn",
+                  "expiresAt":"2099-09-01T08:15:00"
                 }
                 """.formatted(bookingId);
 

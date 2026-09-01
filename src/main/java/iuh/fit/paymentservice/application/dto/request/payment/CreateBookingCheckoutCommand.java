@@ -1,6 +1,7 @@
 package iuh.fit.paymentservice.application.dto.request.payment;
 
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 public record CreateBookingCheckoutCommand(
         UUID payerId,
@@ -8,6 +9,7 @@ public record CreateBookingCheckoutCommand(
         Double amount,
         String currency,
         String locale,
-        String ipAddress
+        String ipAddress,
+        LocalDateTime expiresAt
 ) {
 }

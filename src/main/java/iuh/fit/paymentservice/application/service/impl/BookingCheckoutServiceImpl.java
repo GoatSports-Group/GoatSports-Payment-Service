@@ -31,6 +31,11 @@ public class BookingCheckoutServiceImpl implements BookingCheckoutService {
 
     @Override
     public BookingCheckoutResult create(CreateBookingCheckoutCommand command) {
+        if (command.expiresAt() == null || !command.expiresAt().isAfter(LocalDateTime.now())) {
+            throw new PaymentConflictException(
+                    "BOOKING_HOLD_EXPIRED", "Thời gian giữ chỗ của booking đã hết"
+            );
+        }
         Payment existing = paymentRepository.findByReference(
                 PaymentReferenceType.BOOKING, command.bookingId(), PaymentPurpose.BOOKING_REMAINING
         ).orElse(null);
@@ -46,6 +51,7 @@ public class BookingCheckoutServiceImpl implements BookingCheckoutService {
                     .currency(command.currency())
                     .description("Thanh toán số tiền còn lại của booking")
                     .idempotencyKey("booking-remaining:" + command.bookingId())
+                    .expiresAt(command.expiresAt())
                     .build());
             paymentId = created.getPayment().getPaymentId();
             expiresAt = created.getPayment().getExpiresAt();
