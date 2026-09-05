@@ -35,6 +35,8 @@ public interface PaymentAttemptRepository {
             Collection<PaymentAttemptStatus> statuses
     );
 
+    List<PaymentAttempt> findLatestByPaymentIds(Collection<UUID> paymentIds);
+
     List<PaymentAttempt> findReconciliationCandidates(
             PaymentProvider provider,
             Collection<PaymentAttemptStatus> statuses,

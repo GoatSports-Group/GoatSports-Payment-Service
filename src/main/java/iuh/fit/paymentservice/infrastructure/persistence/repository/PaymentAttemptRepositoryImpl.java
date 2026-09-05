@@ -81,6 +81,14 @@ public class PaymentAttemptRepositoryImpl implements PaymentAttemptRepository {
     }
 
     @Override
+    public List<PaymentAttempt> findLatestByPaymentIds(Collection<UUID> paymentIds) {
+        if (paymentIds == null || paymentIds.isEmpty()) return List.of();
+        return jpaPaymentAttemptRepository.findByPaymentIdInOrderByCreatedAtDesc(paymentIds).stream()
+                .map(paymentAttemptEntityMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<PaymentAttempt> findReconciliationCandidates(
             PaymentProvider provider,
             Collection<PaymentAttemptStatus> statuses,

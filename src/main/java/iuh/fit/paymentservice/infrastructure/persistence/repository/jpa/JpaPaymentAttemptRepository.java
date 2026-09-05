@@ -43,6 +43,8 @@ public interface JpaPaymentAttemptRepository extends JpaRepository<PaymentAttemp
             Collection<PaymentAttemptStatus> statuses
     );
 
+    List<PaymentAttemptEntity> findByPaymentIdInOrderByCreatedAtDesc(Collection<UUID> paymentIds);
+
     List<PaymentAttemptEntity> findByProviderAndStatusInAndUpdatedAtBeforeOrderByUpdatedAtAsc(
             PaymentProvider provider,
             Collection<PaymentAttemptStatus> statuses,

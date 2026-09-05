@@ -3,6 +3,8 @@ package iuh.fit.paymentservice.application.dto.response.payment;
 import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
 import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
+import iuh.fit.paymentservice.domain.enums.PaymentMethod;
+import iuh.fit.paymentservice.domain.enums.PaymentProvider;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -28,6 +30,9 @@ public class PaymentResponseCommand {
     private String description;
     private String idempotencyKey;
     private PaymentStatus status;
+    private PaymentProvider provider;
+    private PaymentMethod method;
+    private String providerTransactionId;
     private LocalDateTime paidAt;
     private LocalDateTime expiresAt;
     private LocalDateTime createdAt;

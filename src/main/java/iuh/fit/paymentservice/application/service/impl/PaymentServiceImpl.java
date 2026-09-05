@@ -8,7 +8,9 @@ import iuh.fit.paymentservice.application.exception.PaymentAccessDeniedException
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.exception.PaymentNotFoundException;
 import iuh.fit.paymentservice.application.mapper.PaymentMapper;
+import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
+import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.application.service.PaymentCreationTransactionService;
 import iuh.fit.paymentservice.application.service.PaymentService;
 import iuh.fit.paymentservice.domain.entity.Payment;
@@ -23,8 +25,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -37,6 +41,7 @@ public class PaymentServiceImpl implements PaymentService {
     private static final double MAX_AMOUNT = 99_999_999_999_999_999D;
 
     private final PaymentRepository paymentRepository;
+    private final PaymentAttemptRepository paymentAttemptRepository;
     private final PaymentMapper paymentMapper;
     private final PaymentCreationTransactionService paymentCreationTransactionService;
 
@@ -108,9 +113,22 @@ public class PaymentServiceImpl implements PaymentService {
                     "Mỗi truy vấn chỉ hỗ trợ tối đa 100 reference ID hợp lệ"
             );
         }
-        return paymentRepository.findByReferences(referenceType, referenceIds).stream()
-                .map(paymentMapper::toPaymentResponseCommand)
-                .toList();
+        List<Payment> payments = paymentRepository.findByReferences(referenceType, referenceIds);
+        Map<UUID, PaymentAttempt> latestAttempts = new LinkedHashMap<>();
+        paymentAttemptRepository.findLatestByPaymentIds(
+                payments.stream().map(Payment::getPaymentId).toList()
+        ).forEach(attempt -> latestAttempts.putIfAbsent(attempt.getPaymentId(), attempt));
+
+        return payments.stream().map(payment -> {
+            PaymentResponseCommand response = paymentMapper.toPaymentResponseCommand(payment);
+            PaymentAttempt attempt = latestAttempts.get(payment.getPaymentId());
+            if (attempt != null) {
+                response.setProvider(attempt.getProvider());
+                response.setMethod(attempt.getMethod());
+                response.setProviderTransactionId(attempt.getProviderTransactionId());
+            }
+            return response;
+        }).toList();
     }
 
     private CreatePaymentResult resolveConcurrentCreate(
