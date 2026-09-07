@@ -55,13 +55,19 @@ public class PaymentServiceImpl implements PaymentService {
             return replayOrConflict(existingByKey.get(), requestHash);
         }
 
-        paymentRepository.findByReference(command.getReferenceType(), command.getReferenceId(), command.getPurpose())
-                .ifPresent(existing -> {
-                    throw new PaymentConflictException(
-                            "PAYMENT_ALREADY_EXISTS",
-                            "Reference và purpose này đã có payment"
-                    );
-                });
+        Optional<Payment> existingByReference = paymentRepository.findByReference(
+                command.getReferenceType(), command.getReferenceId(), command.getPurpose()
+        );
+        if (existingByReference.isPresent()) {
+            Payment existing = existingByReference.get();
+            if (existing.getIdempotencyKey().equals(validated.idempotencyKey())) {
+                return replayOrConflict(existing, requestHash);
+            }
+            throw new PaymentConflictException(
+                    "PAYMENT_ALREADY_EXISTS",
+                    "Reference và purpose này đã có payment"
+            );
+        }
 
         Payment payment = Payment.builder()
                 .payerId(command.getPayerId())
@@ -69,6 +75,8 @@ public class PaymentServiceImpl implements PaymentService {
                 .referenceType(command.getReferenceType())
                 .referenceId(command.getReferenceId())
                 .amount(validated.amount())
+                .platformFeeAmount(0D)
+                .payeeAmount(validated.amount())
                 .currency(validated.currency())
                 .description(validated.description())
                 .idempotencyKey(validated.idempotencyKey())

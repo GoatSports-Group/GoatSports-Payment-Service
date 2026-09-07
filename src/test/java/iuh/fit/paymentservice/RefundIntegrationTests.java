@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import iuh.fit.paymentservice.domain.entity.Refund;
 import iuh.fit.paymentservice.domain.enums.RefundStatus;
+import iuh.fit.paymentservice.infrastructure.persistence.entity.PaymentEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.RefundEntity;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,8 +62,11 @@ class RefundIntegrationTests {
                 Map.entry("failureReason", String.class),
                 Map.entry("refundedAt", LocalDateTime.class)
         ));
-        assertThat(declaredFields(RefundEntity.class))
-                .containsExactlyInAnyOrderEntriesOf(declaredFields(Refund.class));
+        Map<String, Class<?>> refundEntityFields = declaredFields(RefundEntity.class);
+        assertThat(refundEntityFields).containsAllEntriesOf(declaredFields(Refund.class));
+        assertThat(refundEntityFields)
+                .containsEntry("payment", PaymentEntity.class)
+                .hasSize(declaredFields(Refund.class).size() + 1);
         assertThat(Arrays.stream(RefundStatus.values()).map(Enum::name)).containsExactly(
                 "CREATED", "PENDING", "SUCCEEDED", "FAILED", "MANUAL_REVIEW"
         );
@@ -189,11 +193,12 @@ class RefundIntegrationTests {
         LocalDateTime now = LocalDateTime.now();
         jdbcTemplate.update("""
                 insert into payments (
-                    payment_id, payer_id, purpose, reference_type, reference_id, amount, currency,
+                    payment_id, payer_id, purpose, reference_type, reference_id, amount,
+                    platform_fee_amount, payee_amount, currency,
                     description, idempotency_key, status, paid_at, expires_at,
                     created_at, updated_at, created_by, updated_by
-                ) values (?, ?, 'BOOKING_DEPOSIT', 'BOOKING', ?, ?, 'VND', ?, ?, 'SUCCEEDED', ?, ?, ?, ?, ?, ?)
-                """, paymentId, payerId, referenceId, amount, "Test refund", "pay-" + paymentId,
+                ) values (?, ?, 'BOOKING_DEPOSIT', 'BOOKING', ?, ?, 0, ?, 'VND', ?, ?, 'SUCCEEDED', ?, ?, ?, ?, ?, ?)
+                """, paymentId, payerId, referenceId, amount, amount, "Test refund", "pay-" + paymentId,
                 now, now.plusHours(1), now, now, payerId.toString(), payerId.toString());
         jdbcTemplate.update("""
                 insert into payment_attempts (

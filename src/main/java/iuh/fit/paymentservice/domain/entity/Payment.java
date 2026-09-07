@@ -20,10 +20,13 @@ import java.util.UUID;
 public class Payment extends BaseEntity {
     private UUID paymentId;
     private UUID payerId;
+    private UUID payeeId;
     private PaymentPurpose purpose;
     private PaymentReferenceType referenceType;
     private UUID referenceId;
     private Double amount;
+    private Double platformFeeAmount;
+    private Double payeeAmount;
     private String currency;
     private String description;
     private String idempotencyKey;

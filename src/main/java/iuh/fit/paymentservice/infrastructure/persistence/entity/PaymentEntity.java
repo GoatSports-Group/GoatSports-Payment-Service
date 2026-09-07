@@ -34,6 +34,8 @@ public class PaymentEntity extends BaseEntity {
     private UUID paymentId;
     @Column(name = "payer_id", nullable = false)
     private UUID payerId;
+    @Column(name = "payee_id")
+    private UUID payeeId;
     @Enumerated(EnumType.STRING)
     @Column(name = "purpose", nullable = false, length = 40)
     private PaymentPurpose purpose;
@@ -44,6 +46,10 @@ public class PaymentEntity extends BaseEntity {
     private UUID referenceId;
     @Column(name = "amount", nullable = false)
     private Double amount;
+    @Column(name = "platform_fee_amount", nullable = false)
+    private Double platformFeeAmount;
+    @Column(name = "payee_amount", nullable = false)
+    private Double payeeAmount;
     @Column(name = "currency", nullable = false, length = 3)
     private String currency;
     @Column(name = "description", length = 500)

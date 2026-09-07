@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd"
+        logicalFilePath="db/changelog/db.changelog-master.xml"
+>
+    <changeSet id="20260907-01-extend-payment-beneficiary" author="goatsports">
+        <addColumn tableName="payments">
+            <column name="payee_id" type="UUID"/>
+            <column name="platform_fee_amount" type="DOUBLE PRECISION" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payee_amount" type="DOUBLE PRECISION"/>
+        </addColumn>
+
+        <sql>
+            UPDATE payments
+            SET payee_amount = amount - platform_fee_amount
+            WHERE payee_amount IS NULL;
+        </sql>
+
+        <addNotNullConstraint tableName="payments"
+                              columnName="payee_amount"
+                              columnDataType="DOUBLE PRECISION"/>
+
+        <createIndex tableName="payments" indexName="idx_payments_payee_created_at">
+            <column name="payee_id"/>
+            <column name="created_at" descending="true"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE payments
+                ADD CONSTRAINT chk_payments_platform_fee_amount
+                    CHECK (platform_fee_amount &gt;= 0 AND platform_fee_amount &lt;= amount);
+            ALTER TABLE payments
+                ADD CONSTRAINT chk_payments_payee_amount
+                    CHECK (payee_amount &gt;= 0 AND payee_amount = amount - platform_fee_amount);
+        </sql>
+    </changeSet>
+
+    <changeSet id="20260907-02-create-bank-accounts" author="goatsports">
+        <createTable tableName="bank_accounts">
+            <column name="bank_account_id" type="UUID">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_bank_accounts"/>
+            </column>
+            <column name="payee_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="bank_bin" type="VARCHAR(12)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_number_encrypted" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_number_hash" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_number_last4" type="VARCHAR(4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_default" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="verified_at" type="TIMESTAMP"/>
+            <column name="disabled_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="bank_accounts"
+                             columnNames="payee_id, bank_bin, account_number_hash"
+                             constraintName="uq_bank_accounts_payee_destination"/>
+
+        <createIndex tableName="bank_accounts" indexName="idx_bank_accounts_payee_status">
+            <column name="payee_id"/>
+            <column name="status"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE bank_accounts
+                ADD CONSTRAINT chk_bank_accounts_last4_length
+                    CHECK (CHAR_LENGTH(account_number_last4) = 4);
+        </sql>
+    </changeSet>
+
+    <changeSet id="20260907-03-create-settlements" author="goatsports">
+        <createTable tableName="settlements">
+            <column name="settlement_id" type="UUID">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_settlements"/>
+            </column>
+            <column name="payee_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="gross_amount" type="DOUBLE PRECISION">
+                <constraints nullable="false"/>
+            </column>
+            <column name="refund_amount" type="DOUBLE PRECISION">
+                <constraints nullable="false"/>
+            </column>
+            <column name="platform_fee_amount" type="DOUBLE PRECISION">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payout_amount" type="DOUBLE PRECISION">
+                <constraints nullable="false"/>
+            </column>
+            <column name="available_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="settled_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="settlements" indexName="idx_settlements_payee_status_available">
+            <column name="payee_id"/>
+            <column name="status"/>
+            <column name="available_at"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE settlements
+                ADD CONSTRAINT chk_settlements_currency CHECK (currency = 'VND');
+            ALTER TABLE settlements
+                ADD CONSTRAINT chk_settlements_amounts_non_negative
+                    CHECK (gross_amount &gt;= 0
+                        AND refund_amount &gt;= 0
+                        AND platform_fee_amount &gt;= 0
+                        AND payout_amount &gt;= 0);
+        </sql>
+    </changeSet>
+
+    <changeSet id="20260907-04-create-settlement-items" author="goatsports">
+        <createTable tableName="settlement_items">
+            <column name="settlement_item_id" type="UUID">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_settlement_items"/>
+            </column>
+            <column name="settlement_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_settlement_items_settlement"
+                             referencedTableName="settlements"
+                             referencedColumnNames="settlement_id"/>
+            </column>
+            <column name="payment_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_settlement_items_payment"
+                             referencedTableName="payments"
+                             referencedColumnNames="payment_id"/>
+            </column>
+            <column name="refund_id" type="UUID">
+                <constraints nullable="true"
+                             foreignKeyName="fk_settlement_items_refund"
+                             referencedTableName="refunds"
+                             referencedColumnNames="refund_id"
+                             unique="true"
+                             uniqueConstraintName="uq_settlement_items_refund"/>
+            </column>
+            <column name="type" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amount" type="DOUBLE PRECISION">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="settlement_items" indexName="idx_settlement_items_settlement">
+            <column name="settlement_id"/>
+        </createIndex>
+        <createIndex tableName="settlement_items" indexName="idx_settlement_items_payment">
+            <column name="payment_id"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE settlement_items
+                ADD CONSTRAINT chk_settlement_items_refund_reference
+                    CHECK ((type = 'REFUND_DEBIT' AND refund_id IS NOT NULL)
+                        OR (type &lt;&gt; 'REFUND_DEBIT' AND refund_id IS NULL));
+            ALTER TABLE settlement_items
+                ADD CONSTRAINT chk_settlement_items_amount_sign
+                    CHECK ((type = 'PAYMENT_CREDIT' AND amount &gt; 0)
+                        OR (type IN ('PLATFORM_FEE', 'REFUND_DEBIT') AND amount &lt; 0));
+        </sql>
+    </changeSet>
+
+    <changeSet id="20260907-05-create-payouts" author="goatsports">
+        <createTable tableName="payouts">
+            <column name="payout_id" type="UUID">
+                <constraints primaryKey="true" nullable="false" primaryKeyName="pk_payouts"/>
+            </column>
+            <column name="settlement_id" type="UUID">
+                <constraints nullable="false"
+                             unique="true"
+                             uniqueConstraintName="uq_payouts_settlement"
+                             foreignKeyName="fk_payouts_settlement"
+                             referencedTableName="settlements"
+                             referencedColumnNames="settlement_id"/>
+            </column>
+            <column name="bank_account_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_payouts_bank_account"
+                             referencedTableName="bank_accounts"
+                             referencedColumnNames="bank_account_id"/>
+            </column>
+            <column name="provider" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_payout_id" type="VARCHAR(100)"/>
+            <column name="reference_id" type="VARCHAR(128)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_payouts_reference"/>
+            </column>
+            <column name="idempotency_key" type="VARCHAR(128)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_payouts_idempotency_key"/>
+            </column>
+            <column name="amount" type="DOUBLE PRECISION">
+                <constraints nullable="false"/>
+            </column>
+            <column name="destination_bank_bin" type="VARCHAR(12)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="destination_account_masked" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="destination_account_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="requested_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="completed_at" type="TIMESTAMP"/>
+            <column name="failure_code" type="VARCHAR(64)"/>
+            <column name="failure_reason" type="VARCHAR(500)"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="payouts"
+                             columnNames="provider, provider_payout_id"
+                             constraintName="uq_payouts_provider_payout"/>
+
+        <createIndex tableName="payouts" indexName="idx_payouts_bank_account_requested_at">
+            <column name="bank_account_id"/>
+            <column name="requested_at" descending="true"/>
+        </createIndex>
+        <createIndex tableName="payouts" indexName="idx_payouts_status_updated_at">
+            <column name="status"/>
+            <column name="updated_at"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE payouts
+                ADD CONSTRAINT chk_payouts_amount_positive CHECK (amount &gt; 0);
+        </sql>
+    </changeSet>
+</databaseChangeLog>

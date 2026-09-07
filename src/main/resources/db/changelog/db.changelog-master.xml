@@ -11,4 +11,5 @@
     <include file="/db/changelog/schema/31-08-2026/add-provider-checkout-links-to-payment-attempt.xml"/>
     <include file="/db/changelog/schema/01-09-2026/retire-unsupported-payment-providers.xml"/>
     <include file="/db/changelog/schema/01-09-2026/add-payos-webhook-support.xml"/>
+    <include file="/db/changelog/schema/07-09-2026/add-settlement-payout-schema.xml"/>
 </databaseChangeLog>

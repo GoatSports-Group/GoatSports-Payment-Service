@@ -69,7 +69,7 @@ class PaymentServiceApplicationTests {
                 Integer.class
         );
 
-        assertThat(changeCount).isEqualTo(8);
+        assertThat(changeCount).isEqualTo(13);
 
         List<String> paymentColumns = jdbcTemplate.queryForList(
                 "select column_name from information_schema.columns " +
@@ -79,10 +79,13 @@ class PaymentServiceApplicationTests {
         assertThat(paymentColumns).containsExactlyInAnyOrder(
                 "payment_id",
                 "payer_id",
+                "payee_id",
                 "purpose",
                 "reference_type",
                 "reference_id",
                 "amount",
+                "platform_fee_amount",
+                "payee_amount",
                 "currency",
                 "description",
                 "idempotency_key",
@@ -120,6 +123,34 @@ class PaymentServiceApplicationTests {
                 "updated_by"
         );
 
+        List<String> settlementTables = jdbcTemplate.queryForList(
+                "select table_name from information_schema.tables " +
+                        "where table_schema = 'public'",
+                String.class
+        );
+        assertThat(settlementTables).contains(
+                "bank_accounts",
+                "settlements",
+                "settlement_items",
+                "payouts"
+        );
+
+        List<String> foreignKeys = jdbcTemplate.queryForList(
+                "select constraint_name from information_schema.table_constraints " +
+                        "where constraint_schema = 'public' and constraint_type = 'FOREIGN KEY'",
+                String.class
+        );
+        assertThat(foreignKeys).contains(
+                "fk_payment_attempts_payment",
+                "fk_provider_webhook_events_attempt",
+                "fk_refunds_payment",
+                "fk_settlement_items_settlement",
+                "fk_settlement_items_payment",
+                "fk_settlement_items_refund",
+                "fk_payouts_settlement",
+                "fk_payouts_bank_account"
+        );
+
     }
 
     @Test
@@ -139,9 +170,11 @@ class PaymentServiceApplicationTests {
                 Map.entry("initiatedAt", LocalDateTime.class),
                 Map.entry("completedAt", LocalDateTime.class)
         ));
-        assertThat(declaredFields(PaymentAttemptEntity.class)).containsExactlyInAnyOrderEntriesOf(
-                declaredFields(PaymentAttempt.class)
-        );
+        Map<String, Class<?>> attemptEntityFields = declaredFields(PaymentAttemptEntity.class);
+        assertThat(attemptEntityFields).containsAllEntriesOf(declaredFields(PaymentAttempt.class));
+        assertThat(attemptEntityFields)
+                .containsEntry("payment", PaymentEntity.class)
+                .hasSize(declaredFields(PaymentAttempt.class).size() + 1);
         assertThat(Arrays.stream(PaymentMethod.values()).map(Enum::name)).containsExactly(
                 "BANK_TRANSFER",
                 "CASH"
@@ -165,10 +198,13 @@ class PaymentServiceApplicationTests {
         assertThat(declaredFields(Payment.class)).containsExactlyInAnyOrderEntriesOf(Map.ofEntries(
                 Map.entry("paymentId", UUID.class),
                 Map.entry("payerId", UUID.class),
+                Map.entry("payeeId", UUID.class),
                 Map.entry("purpose", PaymentPurpose.class),
                 Map.entry("referenceType", PaymentReferenceType.class),
                 Map.entry("referenceId", UUID.class),
                 Map.entry("amount", Double.class),
+                Map.entry("platformFeeAmount", Double.class),
+                Map.entry("payeeAmount", Double.class),
                 Map.entry("currency", String.class),
                 Map.entry("description", String.class),
                 Map.entry("idempotencyKey", String.class),
