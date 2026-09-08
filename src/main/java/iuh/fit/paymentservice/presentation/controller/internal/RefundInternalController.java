@@ -1,11 +1,13 @@
 package iuh.fit.paymentservice.presentation.controller.internal;
 
 import iuh.fit.paymentservice.application.dto.response.refund.CreateRefundResult;
+import iuh.fit.paymentservice.application.dto.request.refund.CompleteManualRefundCommand;
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.port.security.CurrentUserProvider;
 import iuh.fit.paymentservice.application.service.RefundService;
 import iuh.fit.paymentservice.presentation.converter.RefundConverter;
 import iuh.fit.paymentservice.presentation.request.CreateRefundRequest;
+import iuh.fit.paymentservice.presentation.request.CompleteManualRefundRequest;
 import iuh.fit.paymentservice.presentation.response.RefundResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +46,20 @@ public class RefundInternalController {
         );
         HttpStatus status = result.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(refundConverter.toResponse(result.refund()));
+    }
+
+    @PostMapping("/refunds/{refundId}/manual-completion")
+    public ResponseEntity<RefundResponse> completeManualRefund(
+            @PathVariable UUID refundId,
+            @Valid @RequestBody CompleteManualRefundRequest request
+    ) {
+        return ResponseEntity.ok(refundConverter.toResponse(refundService.completeManualRefund(
+                CompleteManualRefundCommand.builder()
+                        .refundId(refundId)
+                        .completedBy(authenticatedRequesterId())
+                        .providerRefundId(request.getProviderRefundId())
+                        .build()
+        )));
     }
 
     private UUID authenticatedRequesterId() {

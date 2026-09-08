@@ -1,6 +1,7 @@
 package iuh.fit.paymentservice.application.service.impl;
 
 import iuh.fit.paymentservice.application.dto.request.refund.CreateRefundCommand;
+import iuh.fit.paymentservice.application.dto.request.refund.CompleteManualRefundCommand;
 import iuh.fit.paymentservice.application.dto.response.refund.PreparedRefundResult;
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.UUID;
@@ -95,6 +97,59 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
         }
 
         return new PreparedRefundResult(refund, false);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Refund completeManualRefund(CompleteManualRefundCommand command) {
+        if (command == null || command.refundId() == null || command.completedBy() == null
+                || command.providerRefundId() == null || command.providerRefundId().isBlank()
+                || command.providerRefundId().trim().length() > 100) {
+            throw new InvalidPaymentException(
+                    "MANUAL_REFUND_COMPLETION_INVALID",
+                    "Refund ID, người xác nhận và mã giao dịch hoàn tiền hợp lệ là bắt buộc"
+            );
+        }
+
+        Refund refund = refundRepository.findByIdForUpdate(command.refundId())
+                .orElseThrow(() -> new PaymentNotFoundException(command.refundId()));
+        String providerRefundId = command.providerRefundId().trim();
+        if (refund.getStatus() == RefundStatus.SUCCEEDED) {
+            if (Objects.equals(refund.getProviderRefundId(), providerRefundId)) return refund;
+            throw new PaymentConflictException(
+                    "MANUAL_REFUND_ALREADY_COMPLETED",
+                    "Refund đã được xác nhận bằng một mã giao dịch khác"
+            );
+        }
+        if (refund.getStatus() != RefundStatus.MANUAL_REVIEW) {
+            throw new PaymentConflictException(
+                    "MANUAL_REFUND_STATUS_INVALID",
+                    "Chỉ refund đang chờ đối soát thủ công mới có thể xác nhận hoàn tất"
+            );
+        }
+
+        Payment payment = paymentRepository.findByIdForUpdate(refund.getPaymentId())
+                .orElseThrow(() -> new PaymentNotFoundException(refund.getPaymentId()));
+        refund.setProviderRefundId(providerRefundId);
+        refund.setStatus(RefundStatus.SUCCEEDED);
+        refund.setFailureReason(null);
+        refund.setRefundedAt(LocalDateTime.now());
+        Refund saved = refundRepository.save(refund);
+
+        double refundedAmount = refundRepository.findByPaymentIdAndStatuses(
+                        payment.getPaymentId(), EnumSet.of(RefundStatus.SUCCEEDED)
+                ).stream()
+                .map(Refund::getAmount)
+                .filter(Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .sum();
+        PaymentStatus paymentStatus = refundedAmount + 0.001 >= payment.getAmount()
+                ? PaymentStatus.REFUNDED
+                : PaymentStatus.PARTIALLY_REFUNDED;
+        payment.setStatus(paymentStatus);
+        paymentRepository.save(payment);
+        paymentDomainEventService.recordRefundResult(saved, paymentStatus);
+        return saved;
     }
 
     private void validateCommand(CreateRefundCommand command) {

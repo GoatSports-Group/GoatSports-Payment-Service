@@ -152,6 +152,31 @@ class RefundIntegrationTests {
     }
 
     @Test
+    void ownerCanConfirmManualRefundAndPaymentBecomesRefunded() throws Exception {
+        UUID paymentId = createSucceededPayment("PAYOS", "BANK_TRANSFER", 100_000D);
+        UUID requesterId = UUID.randomUUID();
+        TestHttpResponse created = refund(
+                paymentId, requesterId, "refund-" + UUID.randomUUID(), 100_000, "Hủy sân"
+        );
+        UUID refundId = UUID.fromString(responseData(created.body()).path("refundId").asText());
+
+        TestHttpResponse completed = request(
+                "POST", "/internal/payments/refunds/" + refundId + "/manual-completion",
+                Map.of(
+                        "X-Gateway-Secret", GATEWAY_SECRET,
+                        "X-User-Id", requesterId.toString()
+                ),
+                objectMapper.writeValueAsString(Map.of("providerRefundId", "FT-REFUND-100000"))
+        );
+
+        assertThat(completed.status()).isEqualTo(200);
+        assertThat(responseData(completed.body()).path("status").asText()).isEqualTo("SUCCEEDED");
+        assertThat(responseData(completed.body()).path("providerRefundId").asText())
+                .isEqualTo("FT-REFUND-100000");
+        assertThat(paymentStatus(paymentId)).isEqualTo("REFUNDED");
+    }
+
+    @Test
     void concurrentSameIdempotencyKeyCreatesOneManualRefund() throws Exception {
         UUID paymentId = createSucceededPayment("PAYOS", "BANK_TRANSFER", 100_000D);
         UUID requesterId = UUID.randomUUID();
