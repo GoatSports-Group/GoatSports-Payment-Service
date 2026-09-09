@@ -9,6 +9,7 @@ import iuh.fit.paymentservice.application.dto.response.payment.CreatePaymentResu
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.service.BookingCheckoutService;
+import iuh.fit.paymentservice.application.service.BookingRemainingPaymentRetryService;
 import iuh.fit.paymentservice.application.service.PaymentAttemptService;
 import iuh.fit.paymentservice.application.service.PaymentService;
 import iuh.fit.paymentservice.domain.entity.Payment;
@@ -28,6 +29,7 @@ public class BookingCheckoutServiceImpl implements BookingCheckoutService {
     private final PaymentService paymentService;
     private final PaymentAttemptService paymentAttemptService;
     private final PaymentRepository paymentRepository;
+    private final BookingRemainingPaymentRetryService bookingRemainingPaymentRetryService;
 
     @Override
     public BookingCheckoutResult create(CreateBookingCheckoutCommand command) {
@@ -57,8 +59,11 @@ public class BookingCheckoutServiceImpl implements BookingCheckoutService {
             expiresAt = created.getPayment().getExpiresAt();
         } else {
             validateExisting(existing, command);
-            paymentId = existing.getPaymentId();
-            expiresAt = existing.getExpiresAt();
+            Payment prepared = bookingRemainingPaymentRetryService.prepare(
+                    existing.getPaymentId(), command.expiresAt()
+            );
+            paymentId = prepared.getPaymentId();
+            expiresAt = prepared.getExpiresAt();
         }
 
         CreatePaymentAttemptResult attempt = paymentAttemptService.createPaymentAttempt(
