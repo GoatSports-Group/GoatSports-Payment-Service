@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd">
+
+    <changeSet id="20260910-repair-failed-bank-account-verification" author="goatsports">
+        <sql>
+            UPDATE bank_accounts account
+            SET status = 'REJECTED',
+                is_default = FALSE,
+                verified_at = NULL,
+                updated_at = CURRENT_TIMESTAMP,
+                updated_by = 'liquibase'
+            WHERE account.status != 'DISABLED'
+              AND EXISTS (
+                SELECT 1
+                FROM payouts payout
+                WHERE payout.bank_account_id = account.bank_account_id
+                  AND payout.status IN ('FAILED', 'CANCELLED')
+                  AND (
+                    LOWER(COALESCE(payout.failure_code, '')) LIKE '%account_not_found%'
+                    OR LOWER(COALESCE(payout.failure_code, '')) LIKE '%invalid_account%'
+                    OR LOWER(COALESCE(payout.failure_code, '')) LIKE '%destination_account%'
+                    OR LOWER(COALESCE(payout.failure_reason, '')) LIKE '%tài khoản nhận%'
+                    OR LOWER(COALESCE(payout.failure_reason, '')) LIKE '%tai khoan nhan%'
+                  )
+              );
+        </sql>
+    </changeSet>
+</databaseChangeLog>

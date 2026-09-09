@@ -4,11 +4,21 @@ import iuh.fit.paymentservice.domain.entity.Refund;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.RefundEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 @Mapper(componentModel = "spring")
 public interface RefundEntityMapper {
     @Mapping(target = "payment", ignore = true)
     RefundEntity toEntity(Refund refund);
+
+    @Mapping(target = "refundId", ignore = true)
+    @Mapping(target = "paymentId", ignore = true)
+    @Mapping(target = "payment", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(Refund refund, @MappingTarget RefundEntity refundEntity);
 
     Refund toDomain(RefundEntity refundEntity);
 }

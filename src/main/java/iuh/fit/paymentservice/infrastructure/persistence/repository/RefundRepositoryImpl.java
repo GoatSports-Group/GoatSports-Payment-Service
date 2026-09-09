@@ -3,6 +3,7 @@ package iuh.fit.paymentservice.infrastructure.persistence.repository;
 import iuh.fit.paymentservice.application.port.persistence.RefundRepository;
 import iuh.fit.paymentservice.domain.entity.Refund;
 import iuh.fit.paymentservice.domain.enums.RefundStatus;
+import iuh.fit.paymentservice.infrastructure.persistence.entity.RefundEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.mapper.RefundEntityMapper;
 import iuh.fit.paymentservice.infrastructure.persistence.repository.jpa.JpaRefundRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,8 +24,16 @@ public class RefundRepositoryImpl implements RefundRepository {
 
     @Override
     public Refund save(Refund refund) {
+        RefundEntity refundEntity = refund.getRefundId() == null
+                ? refundEntityMapper.toEntity(refund)
+                : jpaRefundRepository.findById(refund.getRefundId())
+                        .map(existing -> {
+                            refundEntityMapper.updateEntity(refund, existing);
+                            return existing;
+                        })
+                        .orElseGet(() -> refundEntityMapper.toEntity(refund));
         return refundEntityMapper.toDomain(
-                jpaRefundRepository.saveAndFlush(refundEntityMapper.toEntity(refund))
+                jpaRefundRepository.saveAndFlush(refundEntity)
         );
     }
 

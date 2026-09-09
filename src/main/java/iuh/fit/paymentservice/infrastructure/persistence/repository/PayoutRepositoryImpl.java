@@ -3,6 +3,7 @@ package iuh.fit.paymentservice.infrastructure.persistence.repository;
 import iuh.fit.paymentservice.application.port.persistence.PayoutRepository;
 import iuh.fit.paymentservice.domain.entity.Payout;
 import iuh.fit.paymentservice.domain.enums.PayoutStatus;
+import iuh.fit.paymentservice.infrastructure.persistence.entity.PayoutEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.mapper.PayoutEntityMapper;
 import iuh.fit.paymentservice.infrastructure.persistence.repository.jpa.JpaPayoutRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,15 @@ public class PayoutRepositoryImpl implements PayoutRepository {
 
     @Override
     public Payout save(Payout payout) {
-        return mapper.toDomain(jpaRepository.saveAndFlush(mapper.toEntity(payout)));
+        PayoutEntity payoutEntity = payout.getPayoutId() == null
+                ? mapper.toEntity(payout)
+                : jpaRepository.findById(payout.getPayoutId())
+                        .map(existing -> {
+                            mapper.updateEntity(payout, existing);
+                            return existing;
+                        })
+                        .orElseGet(() -> mapper.toEntity(payout));
+        return mapper.toDomain(jpaRepository.saveAndFlush(payoutEntity));
     }
 
     @Override

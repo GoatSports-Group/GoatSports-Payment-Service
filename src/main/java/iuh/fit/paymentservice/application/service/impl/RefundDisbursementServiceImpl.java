@@ -138,6 +138,10 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
                         .build()
         ));
         if (payout.getStatus() == PayoutStatus.SUCCEEDED) return refund;
+        if (payout.getStatus() == PayoutStatus.FAILED || payout.getStatus() == PayoutStatus.CANCELLED) {
+            prepareRetry(payout, account, refund);
+            payout = payoutRepository.save(payout);
+        }
 
         refund.setStatus(RefundStatus.PROCESSING);
         refund.setFailureReason(null);
@@ -154,8 +158,8 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
             payout.setFailureCode(exception.getCode());
             payout.setFailureReason(exception.getMessage());
             payoutRepository.save(payout);
-            refund.setStatus(RefundStatus.AWAITING_BANK_ACCOUNT);
-            refund.setFailureReason("Chưa thể xác minh tài khoản qua payOS. Vui lòng kiểm tra và thử lại.");
+            refund.setStatus(RefundStatus.FAILED);
+            refund.setFailureReason(exception.getMessage());
             Refund failed = refundRepository.save(refund);
             paymentDomainEventService.recordRefundResult(failed, payment.getStatus());
             return failed;
@@ -167,8 +171,24 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
         payout.setFailureCode(result.failureCode());
         payout.setFailureReason(result.failureReason());
         Payout saved = payoutRepository.save(payout);
-        updateVerifiedAccount(account, result);
         return applyProviderResult(saved, result);
+    }
+
+    private void prepareRetry(Payout payout, BankAccount account, Refund refund) {
+        String retryId = UUID.randomUUID().toString();
+        payout.setBankAccountId(account.getBankAccountId());
+        payout.setProviderPayoutId(null);
+        payout.setReferenceId("refund-" + refund.getRefundId() + "-" + retryId);
+        payout.setIdempotencyKey("refund-payout-" + refund.getRefundId() + "-" + retryId);
+        payout.setAmount(refund.getAmount());
+        payout.setDestinationBankBin(account.getBankBin());
+        payout.setDestinationAccountMasked("****" + account.getAccountNumberLast4());
+        payout.setDestinationAccountName(account.getAccountName());
+        payout.setStatus(PayoutStatus.PENDING);
+        payout.setRequestedAt(LocalDateTime.now());
+        payout.setCompletedAt(null);
+        payout.setFailureCode(null);
+        payout.setFailureReason(null);
     }
 
     private Refund applyProviderResult(Payout payout, ProviderPayoutResult result) {
@@ -177,6 +197,9 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
         payout.setFailureReason(result.failureReason());
         if (result.status() == PayoutStatus.SUCCEEDED) payout.setCompletedAt(LocalDateTime.now());
         payoutRepository.save(payout);
+
+        bankAccountRepository.findByIdForUpdate(payout.getBankAccountId())
+                .ifPresent(account -> updateVerifiedAccount(account, result));
 
         Refund refund = lockedRefund(payout.getRefundId());
         Payment payment = paymentRepository.findByIdForUpdate(refund.getPaymentId())
@@ -200,17 +223,31 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
     }
 
     private void updateVerifiedAccount(BankAccount account, ProviderPayoutResult result) {
-        if (result.status() == PayoutStatus.FAILED || result.status() == PayoutStatus.CANCELLED) {
+        if ((result.status() == PayoutStatus.FAILED || result.status() == PayoutStatus.CANCELLED)
+                && isBankAccountVerificationFailure(result)) {
             account.setStatus(BankAccountStatus.REJECTED);
             account.setIsDefault(false);
-        } else {
+            account.setVerifiedAt(null);
+        } else if (result.status() == PayoutStatus.SUCCEEDED) {
             account.setStatus(BankAccountStatus.VERIFIED);
             account.setVerifiedAt(account.getVerifiedAt() == null ? LocalDateTime.now() : account.getVerifiedAt());
             if (result.destinationAccountName() != null && !result.destinationAccountName().isBlank()) {
                 account.setAccountName(result.destinationAccountName());
             }
+        } else {
+            return;
         }
         bankAccountRepository.save(account);
+    }
+
+    private boolean isBankAccountVerificationFailure(ProviderPayoutResult result) {
+        String failure = ((result.failureCode() == null ? "" : result.failureCode()) + " "
+                + (result.failureReason() == null ? "" : result.failureReason())).toLowerCase();
+        return failure.contains("account_not_found")
+                || failure.contains("invalid_account")
+                || failure.contains("destination_account")
+                || failure.contains("tài khoản nhận")
+                || failure.contains("tai khoan nhan");
     }
 
     private void updatePaymentRefundedAmount(Payment payment) {
