@@ -33,7 +33,7 @@ class PaymentDomainEventServiceImplTests {
     private final PaymentDomainEventServiceImpl service = new PaymentDomainEventServiceImpl(eventPublisherPort);
 
     @ParameterizedTest
-    @EnumSource(value = PaymentStatus.class, names = {"SUCCEEDED", "FAILED"})
+    @EnumSource(value = PaymentStatus.class, names = {"SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"})
     void recordsVersionedPaymentResultContract(PaymentStatus status) {
         UUID paymentId = UUID.randomUUID();
         UUID payerId = UUID.randomUUID();
@@ -67,9 +67,14 @@ class PaymentDomainEventServiceImplTests {
 
         DomainEventEnvelope event = capturedEvent();
         assertThat(event.getEventId()).isNotNull();
-        assertThat(event.getEventType()).isEqualTo(status == PaymentStatus.SUCCEEDED
-                ? "payment.succeeded.v1"
-                : "payment.failed.v1");
+        String expectedType = switch (status) {
+            case SUCCEEDED -> "payment.succeeded.v1";
+            case FAILED -> "payment.failed.v1";
+            case CANCELLED -> "payment.cancelled.v1";
+            case EXPIRED -> "payment.expired.v1";
+            default -> throw new IllegalStateException("Unexpected status");
+        };
+        assertThat(event.getEventType()).isEqualTo(expectedType);
         assertThat(event.getAggregateId()).isEqualTo(paymentId);
         assertThat(event.getProducer()).isEqualTo("payment-service");
         assertThat(event.getOccurredAt()).isBetween(before, Instant.now());

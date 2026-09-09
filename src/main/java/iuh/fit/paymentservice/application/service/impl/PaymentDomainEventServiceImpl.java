@@ -9,7 +9,6 @@ import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.entity.Refund;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
-import iuh.fit.paymentservice.domain.enums.RefundStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +21,8 @@ public class PaymentDomainEventServiceImpl implements PaymentDomainEventService 
     static final String PRODUCER = "payment-service";
     static final String PAYMENT_SUCCEEDED = "payment.succeeded.v1";
     static final String PAYMENT_FAILED = "payment.failed.v1";
+    static final String PAYMENT_CANCELLED = "payment.cancelled.v1";
+    static final String PAYMENT_EXPIRED = "payment.expired.v1";
     static final String REFUND_SUCCEEDED = "refund.succeeded.v1";
     static final String REFUND_FAILED = "refund.failed.v1";
     static final String REFUND_MANUAL_REVIEW = "refund.manual-review.v1";
@@ -35,6 +36,8 @@ public class PaymentDomainEventServiceImpl implements PaymentDomainEventService 
         String eventType = switch (payment.getStatus()) {
             case SUCCEEDED -> PAYMENT_SUCCEEDED;
             case FAILED -> PAYMENT_FAILED;
+            case CANCELLED -> PAYMENT_CANCELLED;
+            case EXPIRED -> PAYMENT_EXPIRED;
             default -> null;
         };
         if (eventType == null) {

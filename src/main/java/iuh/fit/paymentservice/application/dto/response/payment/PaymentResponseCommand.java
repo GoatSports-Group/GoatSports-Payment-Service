@@ -33,6 +33,8 @@ public class PaymentResponseCommand {
     private PaymentProvider provider;
     private PaymentMethod method;
     private String providerTransactionId;
+    private String failureCode;
+    private String failureReason;
     private LocalDateTime paidAt;
     private LocalDateTime expiresAt;
     private LocalDateTime createdAt;

@@ -44,6 +44,8 @@ public class PaymentConverter {
                 .provider(command.getProvider())
                 .method(command.getMethod())
                 .providerTransactionId(command.getProviderTransactionId())
+                .failureCode(command.getFailureCode())
+                .failureReason(command.getFailureReason())
                 .paidAt(command.getPaidAt())
                 .expiresAt(command.getExpiresAt())
                 .createdAt(command.getCreatedAt())

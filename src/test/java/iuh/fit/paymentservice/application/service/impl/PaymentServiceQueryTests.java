@@ -71,6 +71,31 @@ class PaymentServiceQueryTests {
     }
 
     @Test
+    void returnsLatestAttemptFailureReasonForPlayerPolling() {
+        UUID paymentId = UUID.randomUUID();
+        UUID payerId = UUID.randomUUID();
+        Payment payment = Payment.builder()
+                .paymentId(paymentId).payerId(payerId).status(PaymentStatus.EXPIRED).build();
+        PaymentResponseCommand response = PaymentResponseCommand.builder()
+                .paymentId(paymentId).status(PaymentStatus.EXPIRED).build();
+        PaymentAttempt attempt = PaymentAttempt.builder()
+                .paymentId(paymentId).failureCode("PAYMENT_EXPIRED")
+                .failureReason("Đã hết thời gian giữ chỗ thanh toán").build();
+        when(paymentRepository.findById(paymentId)).thenReturn(java.util.Optional.of(payment));
+        when(paymentMapper.toPaymentResponseCommand(payment)).thenReturn(response);
+        when(paymentAttemptRepository.findLatestByPaymentIds(List.of(paymentId)))
+                .thenReturn(List.of(attempt));
+        var service = new PaymentServiceImpl(
+                paymentRepository, paymentAttemptRepository, paymentMapper, paymentCreationTransactionService
+        );
+
+        PaymentResponseCommand result = service.getPayment(paymentId, payerId);
+
+        assertThat(result.getFailureCode()).isEqualTo("PAYMENT_EXPIRED");
+        assertThat(result.getFailureReason()).isEqualTo("Đã hết thời gian giữ chỗ thanh toán");
+    }
+
+    @Test
     void rejectsEmptyInternalReferenceQuery() {
         var service = new PaymentServiceImpl(
                 paymentRepository, paymentAttemptRepository, paymentMapper, paymentCreationTransactionService

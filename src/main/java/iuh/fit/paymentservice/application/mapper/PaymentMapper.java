@@ -10,5 +10,7 @@ public interface PaymentMapper {
     @Mapping(target = "provider", ignore = true)
     @Mapping(target = "method", ignore = true)
     @Mapping(target = "providerTransactionId", ignore = true)
+    @Mapping(target = "failureCode", ignore = true)
+    @Mapping(target = "failureReason", ignore = true)
     PaymentResponseCommand toPaymentResponseCommand(Payment payment);
 }

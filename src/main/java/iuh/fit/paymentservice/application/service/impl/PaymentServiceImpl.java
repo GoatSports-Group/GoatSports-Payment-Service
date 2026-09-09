@@ -100,7 +100,11 @@ public class PaymentServiceImpl implements PaymentService {
         if (!payment.getPayerId().equals(payerUserId)) {
             throw new PaymentAccessDeniedException();
         }
-        return paymentMapper.toPaymentResponseCommand(payment);
+        PaymentResponseCommand response = paymentMapper.toPaymentResponseCommand(payment);
+        paymentAttemptRepository.findLatestByPaymentIds(List.of(paymentId)).stream()
+                .findFirst()
+                .ifPresent(attempt -> enrichAttempt(response, attempt));
+        return response;
     }
 
     @Override
@@ -131,12 +135,18 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentResponseCommand response = paymentMapper.toPaymentResponseCommand(payment);
             PaymentAttempt attempt = latestAttempts.get(payment.getPaymentId());
             if (attempt != null) {
-                response.setProvider(attempt.getProvider());
-                response.setMethod(attempt.getMethod());
-                response.setProviderTransactionId(attempt.getProviderTransactionId());
+                enrichAttempt(response, attempt);
             }
             return response;
         }).toList();
+    }
+
+    private void enrichAttempt(PaymentResponseCommand response, PaymentAttempt attempt) {
+        response.setProvider(attempt.getProvider());
+        response.setMethod(attempt.getMethod());
+        response.setProviderTransactionId(attempt.getProviderTransactionId());
+        response.setFailureCode(attempt.getFailureCode());
+        response.setFailureReason(attempt.getFailureReason());
     }
 
     private CreatePaymentResult resolveConcurrentCreate(
