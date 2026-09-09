@@ -9,4 +9,6 @@ public interface RefundService {
     CreateRefundResult createRefund(CreateRefundCommand command);
 
     RefundResponseCommand completeManualRefund(CompleteManualRefundCommand command);
+
+    RefundResponseCommand claim(java.util.UUID refundId, java.util.UUID payerId);
 }

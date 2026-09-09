@@ -17,4 +17,5 @@ public class CreateRefundCommand {
     private String reason;
     private Double amount;
     private String idempotencyKey;
+    private Boolean autoDisburse;
 }

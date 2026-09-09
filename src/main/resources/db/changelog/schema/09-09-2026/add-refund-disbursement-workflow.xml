@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd"
+        logicalFilePath="db/changelog/db.changelog-master.xml">
+    <changeSet id="20260909-01-refund-disbursement-workflow" author="goatsports">
+        <addColumn tableName="refunds">
+            <column name="auto_disburse" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <dropNotNullConstraint tableName="payouts"
+                               columnName="settlement_id"
+                               columnDataType="UUID"/>
+        <addColumn tableName="payouts">
+            <column name="refund_id" type="UUID">
+                <constraints nullable="true"
+                             unique="true"
+                             uniqueConstraintName="uq_payouts_refund"
+                             foreignKeyName="fk_payouts_refund"
+                             referencedTableName="refunds"
+                             referencedColumnNames="refund_id"/>
+            </column>
+        </addColumn>
+        <sql>
+            ALTER TABLE payouts
+                ADD CONSTRAINT chk_payouts_single_source
+                    CHECK ((settlement_id IS NOT NULL AND refund_id IS NULL)
+                        OR (settlement_id IS NULL AND refund_id IS NOT NULL));
+        </sql>
+    </changeSet>
+</databaseChangeLog>

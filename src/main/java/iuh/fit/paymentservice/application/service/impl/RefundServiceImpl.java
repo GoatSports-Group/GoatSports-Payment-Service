@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 public class RefundServiceImpl implements RefundService {
     private final RefundTransactionService refundTransactionService;
     private final RefundMapper refundMapper;
+    private final iuh.fit.paymentservice.application.service.RefundDisbursementService refundDisbursementService;
 
     @Override
     public CreateRefundResult createRefund(CreateRefundCommand command) {
@@ -27,12 +28,26 @@ public class RefundServiceImpl implements RefundService {
         } catch (DataIntegrityViolationException exception) {
             prepared = refundTransactionService.prepare(command);
         }
-        return result(prepared.refund(), prepared.replayed());
+        Refund refund = prepared.refund();
+        if (!prepared.replayed() && Boolean.TRUE.equals(refund.getAutoDisburse())) {
+            try {
+                refundDisbursementService.processAutomaticRefund(refund.getRefundId());
+                refund = refundTransactionService.findById(refund.getRefundId());
+            } catch (iuh.fit.paymentservice.application.exception.PaymentConflictException exception) {
+                if (!"BANK_ACCOUNT_REQUIRED".equals(exception.getCode())) throw exception;
+            }
+        }
+        return result(refund, prepared.replayed());
     }
 
     @Override
     public RefundResponseCommand completeManualRefund(CompleteManualRefundCommand command) {
         return refundMapper.toRefundResponseCommand(refundTransactionService.completeManualRefund(command));
+    }
+
+    @Override
+    public RefundResponseCommand claim(java.util.UUID refundId, java.util.UUID payerId) {
+        return refundMapper.toRefundResponseCommand(refundDisbursementService.claim(refundId, payerId));
     }
 
     private CreateRefundResult result(Refund refund, boolean replayed) {

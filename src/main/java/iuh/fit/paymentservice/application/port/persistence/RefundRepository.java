@@ -20,6 +20,8 @@ public interface RefundRepository {
 
     List<Refund> findByPaymentIdAndStatuses(UUID paymentId, Collection<RefundStatus> statuses);
 
+    List<Refund> findAutomaticByPayerIdAndStatus(UUID payerId, RefundStatus status);
+
     List<Refund> findReconciliationCandidates(
             Collection<RefundStatus> statuses,
             LocalDateTime updatedBefore,

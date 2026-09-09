@@ -9,4 +9,6 @@ public interface RefundTransactionService {
     PreparedRefundResult prepare(CreateRefundCommand command);
 
     Refund completeManualRefund(CompleteManualRefundCommand command);
+
+    Refund findById(java.util.UUID refundId);
 }

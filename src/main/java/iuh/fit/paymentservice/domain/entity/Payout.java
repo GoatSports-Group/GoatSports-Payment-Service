@@ -19,6 +19,7 @@ import java.util.UUID;
 public class Payout extends BaseEntity {
     private UUID payoutId;
     private UUID settlementId;
+    private UUID refundId;
     private UUID bankAccountId;
     private PaymentProvider provider;
     private String providerPayoutId;

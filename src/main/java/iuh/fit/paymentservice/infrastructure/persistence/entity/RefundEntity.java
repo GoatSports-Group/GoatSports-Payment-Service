@@ -48,6 +48,8 @@ public class RefundEntity extends BaseEntity {
     private String providerRefundId;
     @Column(name = "idempotency_key", nullable = false, length = 128)
     private String idempotencyKey;
+    @Column(name = "auto_disburse", nullable = false)
+    private Boolean autoDisburse;
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 32)
     private RefundStatus status;

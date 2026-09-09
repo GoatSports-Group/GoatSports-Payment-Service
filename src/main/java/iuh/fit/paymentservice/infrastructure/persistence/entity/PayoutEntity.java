@@ -35,11 +35,16 @@ public class PayoutEntity extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "payout_id", nullable = false)
     private UUID payoutId;
-    @Column(name = "settlement_id", nullable = false, unique = true)
+    @Column(name = "settlement_id", unique = true)
     private UUID settlementId;
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "settlement_id", nullable = false, insertable = false, updatable = false)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "settlement_id", insertable = false, updatable = false)
     private SettlementEntity settlement;
+    @Column(name = "refund_id", unique = true)
+    private UUID refundId;
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "refund_id", insertable = false, updatable = false)
+    private RefundEntity refund;
     @Column(name = "bank_account_id", nullable = false)
     private UUID bankAccountId;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

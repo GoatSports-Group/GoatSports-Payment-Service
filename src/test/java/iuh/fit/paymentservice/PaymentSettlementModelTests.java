@@ -71,6 +71,7 @@ class PaymentSettlementModelTests {
         assertThat(declaredFields(Payout.class)).containsExactlyInAnyOrderEntriesOf(Map.ofEntries(
                 Map.entry("payoutId", UUID.class),
                 Map.entry("settlementId", UUID.class),
+                Map.entry("refundId", UUID.class),
                 Map.entry("bankAccountId", UUID.class),
                 Map.entry("provider", PaymentProvider.class),
                 Map.entry("providerPayoutId", String.class),
@@ -96,7 +97,8 @@ class PaymentSettlementModelTests {
         assertManyToOne(SettlementItemEntity.class, "settlement", "settlement_id", false);
         assertManyToOne(SettlementItemEntity.class, "payment", "payment_id", false);
         assertOneToOne(SettlementItemEntity.class, "refund", "refund_id", true);
-        assertOneToOne(PayoutEntity.class, "settlement", "settlement_id", false);
+        assertOneToOne(PayoutEntity.class, "settlement", "settlement_id", true);
+        assertOneToOne(PayoutEntity.class, "refund", "refund_id", true);
         assertManyToOne(PayoutEntity.class, "bankAccount", "bank_account_id", false);
 
         assertThat(declaredFields(BankAccountEntity.class))

@@ -58,6 +58,7 @@ class RefundIntegrationTests {
                 Map.entry("amount", Double.class),
                 Map.entry("providerRefundId", String.class),
                 Map.entry("idempotencyKey", String.class),
+                Map.entry("autoDisburse", Boolean.class),
                 Map.entry("status", RefundStatus.class),
                 Map.entry("failureReason", String.class),
                 Map.entry("refundedAt", LocalDateTime.class)
@@ -68,7 +69,8 @@ class RefundIntegrationTests {
                 .containsEntry("payment", PaymentEntity.class)
                 .hasSize(declaredFields(Refund.class).size() + 1);
         assertThat(Arrays.stream(RefundStatus.values()).map(Enum::name)).containsExactly(
-                "CREATED", "PENDING", "SUCCEEDED", "FAILED", "MANUAL_REVIEW"
+                "CREATED", "AWAITING_CLAIM", "AWAITING_BANK_ACCOUNT", "PENDING", "PROCESSING",
+                "SUCCEEDED", "FAILED", "MANUAL_REVIEW"
         );
         assertThat(jdbcTemplate.queryForList(
                 "select column_name from information_schema.columns "
@@ -76,7 +78,7 @@ class RefundIntegrationTests {
                 String.class
         )).containsExactlyInAnyOrder(
                 "refund_id", "payment_id", "requested_by", "reason", "amount",
-                "provider_refund_id", "idempotency_key", "status", "failure_reason",
+                "provider_refund_id", "idempotency_key", "auto_disburse", "status", "failure_reason",
                 "refunded_at", "created_at", "updated_at", "created_by", "updated_by"
         );
     }
@@ -90,7 +92,7 @@ class RefundIntegrationTests {
         TestHttpResponse first = refund(paymentId, requesterId, firstKey, 40_000, "Hủy một phần sân");
         assertThat(first.status()).isEqualTo(201);
         JsonNode firstRefund = responseData(first.body());
-        assertThat(firstRefund.path("status").asText()).isEqualTo("MANUAL_REVIEW");
+        assertThat(firstRefund.path("status").asText()).isEqualTo("AWAITING_CLAIM");
         assertThat(firstRefund.path("amount").asDouble()).isEqualTo(40_000D);
         assertThat(paymentStatus(paymentId)).isEqualTo("SUCCEEDED");
 
@@ -104,14 +106,14 @@ class RefundIntegrationTests {
                 paymentId, requesterId, "refund-" + UUID.randomUUID(), 60_000, "Hủy phần còn lại"
         );
         assertThat(second.status()).isEqualTo(201);
-        assertThat(responseData(second.body()).path("status").asText()).isEqualTo("MANUAL_REVIEW");
+        assertThat(responseData(second.body()).path("status").asText()).isEqualTo("AWAITING_CLAIM");
         assertThat(paymentStatus(paymentId)).isEqualTo("SUCCEEDED");
         assertThat(refundCount(paymentId)).isEqualTo(2);
     }
 
     @Test
     void refundCannotExceedUnreservedPaymentAmount() throws Exception {
-        UUID paymentId = createSucceededPayment("PAYOS", "BANK_TRANSFER", 100_000D);
+        UUID paymentId = createSucceededPayment("MANUAL", "CASH", 100_000D);
         UUID requesterId = UUID.randomUUID();
         assertThat(refund(paymentId, requesterId, "refund-" + UUID.randomUUID(),
                 40_000, "Refund lần một").status()).isEqualTo(201);
@@ -153,7 +155,7 @@ class RefundIntegrationTests {
 
     @Test
     void ownerCanConfirmManualRefundAndPaymentBecomesRefunded() throws Exception {
-        UUID paymentId = createSucceededPayment("PAYOS", "BANK_TRANSFER", 100_000D);
+        UUID paymentId = createSucceededPayment("MANUAL", "CASH", 100_000D);
         UUID requesterId = UUID.randomUUID();
         TestHttpResponse created = refund(
                 paymentId, requesterId, "refund-" + UUID.randomUUID(), 100_000, "Hủy sân"
@@ -245,7 +247,9 @@ class RefundIntegrationTests {
                         "X-Gateway-Secret", GATEWAY_SECRET,
                         "X-User-Id", requesterId.toString(),
                         "Idempotency-Key", idempotencyKey
-                ), objectMapper.writeValueAsString(Map.of("amount", amount, "reason", reason)));
+                ), objectMapper.writeValueAsString(Map.of(
+                        "amount", amount, "reason", reason, "autoDisburse", false
+                )));
     }
 
     private String paymentStatus(UUID paymentId) {

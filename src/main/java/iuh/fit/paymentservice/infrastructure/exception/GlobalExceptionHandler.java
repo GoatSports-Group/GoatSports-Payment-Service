@@ -48,6 +48,8 @@ public class GlobalExceptionHandler {
 
     private boolean isConfigurationError(PaymentProviderException exception) {
         return "PAYOS_DISABLED".equals(exception.getCode())
+                || "PAYOS_PAYOUT_DISABLED".equals(exception.getCode())
+                || "BANK_ACCOUNT_ENCRYPTION_NOT_CONFIGURED".equals(exception.getCode())
                 || "PAYOS_CONFIGURATION_ERROR".equals(exception.getCode());
     }
 

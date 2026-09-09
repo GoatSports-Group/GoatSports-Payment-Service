@@ -12,4 +12,5 @@
     <include file="/db/changelog/schema/01-09-2026/retire-unsupported-payment-providers.xml"/>
     <include file="/db/changelog/schema/01-09-2026/add-payos-webhook-support.xml"/>
     <include file="/db/changelog/schema/07-09-2026/add-settlement-payout-schema.xml"/>
+    <include file="/db/changelog/schema/09-09-2026/add-refund-disbursement-workflow.xml"/>
 </databaseChangeLog>

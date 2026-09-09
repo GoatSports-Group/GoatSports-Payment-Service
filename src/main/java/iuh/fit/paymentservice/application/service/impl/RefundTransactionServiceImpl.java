@@ -39,7 +39,10 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
     );
     private static final EnumSet<RefundStatus> RESERVED_REFUND_STATUSES = EnumSet.of(
             RefundStatus.CREATED,
+            RefundStatus.AWAITING_CLAIM,
+            RefundStatus.AWAITING_BANK_ACCOUNT,
             RefundStatus.PENDING,
+            RefundStatus.PROCESSING,
             RefundStatus.SUCCEEDED,
             RefundStatus.MANUAL_REVIEW
     );
@@ -74,28 +77,33 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
         validatePayment(payment);
         validateAvailableAmount(payment, command.getAmount());
 
-        paymentAttemptRepository
+        var successfulAttempt = paymentAttemptRepository
                 .findLatestByPaymentIdAndStatuses(payment.getPaymentId(), SUCCEEDED_ATTEMPT_STATUS)
                 .orElseThrow(() -> new PaymentConflictException(
                         "SUCCESSFUL_PAYMENT_ATTEMPT_NOT_FOUND",
                         "Không tìm thấy payment attempt thành công để hoàn tiền"
                 ));
 
-        RefundStatus initialStatus = RefundStatus.MANUAL_REVIEW;
-        String failureReason = "Chuyển khoản không hỗ trợ hoàn tự động; cần hoàn tiền ngoài hệ thống và xác nhận thủ công";
+        boolean manualPayment = successfulAttempt.getProvider() == iuh.fit.paymentservice.domain.enums.PaymentProvider.MANUAL
+                || successfulAttempt.getMethod() == iuh.fit.paymentservice.domain.enums.PaymentMethod.CASH;
+        RefundStatus initialStatus = manualPayment
+                ? RefundStatus.MANUAL_REVIEW
+                : Boolean.TRUE.equals(command.getAutoDisburse())
+                    ? RefundStatus.AWAITING_BANK_ACCOUNT
+                    : RefundStatus.AWAITING_CLAIM;
+        String failureReason = initialStatus == RefundStatus.AWAITING_BANK_ACCOUNT
+                ? "Vui lòng liên kết tài khoản ngân hàng để nhận hoàn tiền"
+                : null;
         Refund refund = refundRepository.save(Refund.builder()
                 .paymentId(payment.getPaymentId())
                 .requestedBy(command.getRequestedBy())
                 .reason(command.getReason().trim())
                 .amount(command.getAmount())
                 .idempotencyKey(command.getIdempotencyKey().trim())
+                .autoDisburse(Boolean.TRUE.equals(command.getAutoDisburse()))
                 .status(initialStatus)
                 .failureReason(failureReason)
                 .build());
-        if (refund.getStatus() == RefundStatus.MANUAL_REVIEW) {
-            paymentDomainEventService.recordRefundResult(refund, payment.getStatus());
-        }
-
         return new PreparedRefundResult(refund, false);
     }
 
@@ -156,7 +164,8 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
         if (command == null
                 || command.getPaymentId() == null
                 || command.getRequestedBy() == null
-                || command.getAmount() == null) {
+                || command.getAmount() == null
+                || command.getAutoDisburse() == null) {
             throw new InvalidPaymentException(
                     "REFUND_REQUEST_INVALID",
                     "Payment ID, requestedBy và amount là bắt buộc"
@@ -218,6 +227,7 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
         boolean samePayload = existing.getPaymentId().equals(command.getPaymentId())
                 && existing.getRequestedBy().equals(command.getRequestedBy())
                 && Objects.equals(existing.getReason(), command.getReason().trim())
+                && Objects.equals(existing.getAutoDisburse(), command.getAutoDisburse())
                 && BigDecimal.valueOf(existing.getAmount())
                 .compareTo(BigDecimal.valueOf(command.getAmount())) == 0;
         if (!samePayload) {
@@ -226,6 +236,12 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
                     "Idempotency-Key đã được dùng cho một refund khác"
             );
         }
+    }
+
+    @Override
+    public Refund findById(UUID refundId) {
+        return refundRepository.findById(refundId)
+                .orElseThrow(() -> new PaymentNotFoundException(refundId));
     }
 
 }

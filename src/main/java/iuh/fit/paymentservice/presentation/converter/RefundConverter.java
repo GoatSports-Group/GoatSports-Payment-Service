@@ -21,6 +21,7 @@ public class RefundConverter {
                 .requestedBy(requestedBy)
                 .reason(request.getReason())
                 .amount(request.getAmount())
+                .autoDisburse(request.getAutoDisburse())
                 .idempotencyKey(idempotencyKey)
                 .build();
     }
@@ -34,6 +35,7 @@ public class RefundConverter {
                 .amount(command.getAmount())
                 .providerRefundId(command.getProviderRefundId())
                 .idempotencyKey(command.getIdempotencyKey())
+                .autoDisburse(command.getAutoDisburse())
                 .status(command.getStatus())
                 .failureReason(command.getFailureReason())
                 .refundedAt(command.getRefundedAt())

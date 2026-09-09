@@ -25,6 +25,8 @@ public class PaymentDomainEventServiceImpl implements PaymentDomainEventService 
     static final String REFUND_SUCCEEDED = "refund.succeeded.v1";
     static final String REFUND_FAILED = "refund.failed.v1";
     static final String REFUND_MANUAL_REVIEW = "refund.manual-review.v1";
+    static final String REFUND_AWAITING_BANK_ACCOUNT = "refund.awaiting-bank-account.v1";
+    static final String REFUND_PROCESSING = "refund.processing.v1";
 
     private final DomainEventPublisherPort domainEventPublisherPort;
 
@@ -63,6 +65,8 @@ public class PaymentDomainEventServiceImpl implements PaymentDomainEventService 
             case SUCCEEDED -> REFUND_SUCCEEDED;
             case FAILED -> REFUND_FAILED;
             case MANUAL_REVIEW -> REFUND_MANUAL_REVIEW;
+            case AWAITING_BANK_ACCOUNT -> REFUND_AWAITING_BANK_ACCOUNT;
+            case PROCESSING -> REFUND_PROCESSING;
             default -> null;
         };
         if (eventType == null) {

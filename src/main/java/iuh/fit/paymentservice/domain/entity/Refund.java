@@ -23,6 +23,7 @@ public class Refund extends BaseEntity {
     private Double amount;
     private String providerRefundId;
     private String idempotencyKey;
+    private Boolean autoDisburse;
     private RefundStatus status;
     private String failureReason;
     private LocalDateTime refundedAt;

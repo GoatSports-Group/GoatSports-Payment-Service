@@ -20,4 +20,6 @@ public class CreateRefundRequest {
     @NotNull(message = "Số tiền refund là bắt buộc")
     @Positive(message = "Số tiền refund phải lớn hơn 0")
     private Double amount;
+    @NotNull(message = "Phải xác định chế độ tự động giải ngân")
+    private Boolean autoDisburse;
 }
