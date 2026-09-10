@@ -35,7 +35,7 @@ public class BookingRemainingPaymentRetryServiceImpl implements BookingRemaining
     public Payment prepare(UUID paymentId, LocalDateTime expiresAt) {
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new PaymentNotFoundException(paymentId));
-        validateBookingRemaining(payment);
+        ensureBookingRemaining(payment);
 
         if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
             throw new PaymentConflictException(
@@ -76,7 +76,7 @@ public class BookingRemainingPaymentRetryServiceImpl implements BookingRemaining
         return paymentRepository.save(payment);
     }
 
-    private void validateBookingRemaining(Payment payment) {
+    private void ensureBookingRemaining(Payment payment) {
         if (payment.getReferenceType() != PaymentReferenceType.BOOKING
                 || payment.getPurpose() != PaymentPurpose.BOOKING_REMAINING) {
             throw new PaymentConflictException(

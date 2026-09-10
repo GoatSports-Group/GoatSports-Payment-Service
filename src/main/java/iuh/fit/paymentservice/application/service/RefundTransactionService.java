@@ -5,10 +5,12 @@ import iuh.fit.paymentservice.application.dto.request.refund.CompleteManualRefun
 import iuh.fit.paymentservice.application.dto.response.refund.PreparedRefundResult;
 import iuh.fit.paymentservice.domain.entity.Refund;
 
+import java.util.UUID;
+
 public interface RefundTransactionService {
     PreparedRefundResult prepare(CreateRefundCommand command);
 
     Refund completeManualRefund(CompleteManualRefundCommand command);
 
-    Refund findById(java.util.UUID refundId);
+    Refund findById(UUID refundId);
 }

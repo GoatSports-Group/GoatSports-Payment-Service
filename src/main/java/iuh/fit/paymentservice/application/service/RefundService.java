@@ -5,10 +5,12 @@ import iuh.fit.paymentservice.application.dto.request.refund.CompleteManualRefun
 import iuh.fit.paymentservice.application.dto.response.refund.CreateRefundResult;
 import iuh.fit.paymentservice.application.dto.response.refund.RefundResponseCommand;
 
+import java.util.UUID;
+
 public interface RefundService {
     CreateRefundResult createRefund(CreateRefundCommand command);
 
     RefundResponseCommand completeManualRefund(CompleteManualRefundCommand command);
 
-    RefundResponseCommand claim(java.util.UUID refundId, java.util.UUID payerId);
+    RefundResponseCommand claim(UUID refundId, UUID payerId);
 }

@@ -61,7 +61,7 @@ public class PayOsCheckoutAdapter implements PaymentCheckoutPort {
 
         try {
             CreatePaymentLinkResponse response = clientProvider.get().paymentRequests().create(request);
-            validateResponse(response, command.getOrderCode(), amount);
+            ensureValidResponse(response, command.getOrderCode(), amount);
             return new ProviderCheckoutResult(
                     response.getCheckoutUrl(),
                     null,
@@ -79,7 +79,7 @@ public class PayOsCheckoutAdapter implements PaymentCheckoutPort {
         }
     }
 
-    private void validateResponse(CreatePaymentLinkResponse response, long orderCode, long amount) {
+    private void ensureValidResponse(CreatePaymentLinkResponse response, long orderCode, long amount) {
         if (response == null
                 || response.getOrderCode() == null
                 || response.getOrderCode() != orderCode

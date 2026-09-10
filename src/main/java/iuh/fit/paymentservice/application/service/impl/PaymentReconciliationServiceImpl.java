@@ -56,7 +56,7 @@ public class PaymentReconciliationServiceImpl implements PaymentReconciliationSe
         ProviderPaymentStatusResult providerResult = paymentStatusProviderPort.get(
                 attempt.getProviderTransactionId()
         );
-        validateIdentity(attempt, payment, providerResult);
+        ensureProviderIdentityMatches(attempt, payment, providerResult);
 
         LocalDateTime now = LocalDateTime.now();
         if (providerResult.status() == ProviderPaymentStatusResult.Status.PENDING
@@ -66,7 +66,7 @@ public class PaymentReconciliationServiceImpl implements PaymentReconciliationSe
                     attempt.getProviderTransactionId(),
                     "GoatSports payment expired"
             );
-            validateIdentity(attempt, payment, providerResult);
+            ensureProviderIdentityMatches(attempt, payment, providerResult);
             if (providerResult.status() == ProviderPaymentStatusResult.Status.CANCELLED) {
                 providerResult = new ProviderPaymentStatusResult(
                         providerResult.providerTransactionId(), providerResult.orderCode(),
@@ -143,7 +143,7 @@ public class PaymentReconciliationServiceImpl implements PaymentReconciliationSe
         log.info("Payment {} reconciled as {}", savedPayment.getPaymentId(), savedPayment.getStatus());
     }
 
-    private void validateIdentity(
+    private void ensureProviderIdentityMatches(
             PaymentAttempt attempt,
             Payment payment,
             ProviderPaymentStatusResult providerResult

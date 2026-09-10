@@ -14,6 +14,8 @@ import iuh.fit.paymentservice.application.service.PaymentDomainEventService;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.Refund;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
+import iuh.fit.paymentservice.domain.enums.PaymentMethod;
+import iuh.fit.paymentservice.domain.enums.PaymentProvider;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import iuh.fit.paymentservice.domain.enums.RefundStatus;
 import lombok.RequiredArgsConstructor;
@@ -27,12 +29,10 @@ import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class RefundTransactionServiceImpl implements RefundTransactionService {
-    private static final Pattern IDEMPOTENCY_KEY_PATTERN = Pattern.compile("[A-Za-z0-9._:-]{8,128}");
     private static final EnumSet<PaymentStatus> REFUNDABLE_PAYMENT_STATUSES = EnumSet.of(
             PaymentStatus.SUCCEEDED,
             PaymentStatus.PARTIALLY_REFUNDED
@@ -57,11 +57,11 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public PreparedRefundResult prepare(CreateRefundCommand command) {
-        validateCommand(command);
+        command.validate();
         Refund existing = refundRepository.findByIdempotencyKey(command.getIdempotencyKey())
                 .orElse(null);
         if (existing != null) {
-            validateIdempotentReplay(existing, command);
+            ensureIdempotentReplayMatches(existing, command);
             return new PreparedRefundResult(existing, true);
         }
 
@@ -70,12 +70,12 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
 
         existing = refundRepository.findByIdempotencyKey(command.getIdempotencyKey()).orElse(null);
         if (existing != null) {
-            validateIdempotentReplay(existing, command);
+            ensureIdempotentReplayMatches(existing, command);
             return new PreparedRefundResult(existing, true);
         }
 
-        validatePayment(payment);
-        validateAvailableAmount(payment, command.getAmount());
+        ensurePaymentRefundable(payment);
+        ensureRefundAmountAvailable(payment, command.getAmount());
 
         var successfulAttempt = paymentAttemptRepository
                 .findLatestByPaymentIdAndStatuses(payment.getPaymentId(), SUCCEEDED_ATTEMPT_STATUS)
@@ -84,8 +84,8 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
                         "Không tìm thấy payment attempt thành công để hoàn tiền"
                 ));
 
-        boolean manualPayment = successfulAttempt.getProvider() == iuh.fit.paymentservice.domain.enums.PaymentProvider.MANUAL
-                || successfulAttempt.getMethod() == iuh.fit.paymentservice.domain.enums.PaymentMethod.CASH;
+        boolean manualPayment = successfulAttempt.getProvider() == PaymentProvider.MANUAL
+                || successfulAttempt.getMethod() == PaymentMethod.CASH;
         RefundStatus initialStatus = manualPayment
                 ? RefundStatus.MANUAL_REVIEW
                 : Boolean.TRUE.equals(command.getAutoDisburse())
@@ -110,14 +110,7 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Refund completeManualRefund(CompleteManualRefundCommand command) {
-        if (command == null || command.refundId() == null || command.completedBy() == null
-                || command.providerRefundId() == null || command.providerRefundId().isBlank()
-                || command.providerRefundId().trim().length() > 100) {
-            throw new InvalidPaymentException(
-                    "MANUAL_REFUND_COMPLETION_INVALID",
-                    "Refund ID, người xác nhận và mã giao dịch hoàn tiền hợp lệ là bắt buộc"
-            );
-        }
+        command.validate();
 
         Refund refund = refundRepository.findByIdForUpdate(command.refundId())
                 .orElseThrow(() -> new PaymentNotFoundException(command.refundId()));
@@ -160,40 +153,7 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
         return saved;
     }
 
-    private void validateCommand(CreateRefundCommand command) {
-        if (command == null
-                || command.getPaymentId() == null
-                || command.getRequestedBy() == null
-                || command.getAmount() == null
-                || command.getAutoDisburse() == null) {
-            throw new InvalidPaymentException(
-                    "REFUND_REQUEST_INVALID",
-                    "Payment ID, requestedBy và amount là bắt buộc"
-            );
-        }
-        if (!Double.isFinite(command.getAmount()) || command.getAmount() <= 0) {
-            throw new InvalidPaymentException("REFUND_AMOUNT_INVALID", "Số tiền refund phải lớn hơn 0");
-        }
-        try {
-            BigDecimal.valueOf(command.getAmount()).setScale(0, RoundingMode.UNNECESSARY);
-        } catch (ArithmeticException exception) {
-            throw new InvalidPaymentException("REFUND_AMOUNT_INVALID", "Số tiền refund phải là số nguyên VND");
-        }
-        if (command.getReason() == null
-                || command.getReason().isBlank()
-                || command.getReason().trim().length() > 500) {
-            throw new InvalidPaymentException("REFUND_REASON_INVALID", "Lý do refund phải có từ 1 đến 500 ký tự");
-        }
-        if (command.getIdempotencyKey() == null
-                || !IDEMPOTENCY_KEY_PATTERN.matcher(command.getIdempotencyKey().trim()).matches()) {
-            throw new InvalidPaymentException(
-                    "IDEMPOTENCY_KEY_INVALID",
-                    "Idempotency-Key phải dài 8-128 ký tự và chỉ chứa chữ, số, '.', '_', ':', '-'"
-            );
-        }
-    }
-
-    private void validatePayment(Payment payment) {
+    private void ensurePaymentRefundable(Payment payment) {
         if (!REFUNDABLE_PAYMENT_STATUSES.contains(payment.getStatus())) {
             throw new PaymentConflictException(
                     "PAYMENT_NOT_REFUNDABLE",
@@ -205,7 +165,7 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
         }
     }
 
-    private void validateAvailableAmount(Payment payment, Double requestedAmount) {
+    private void ensureRefundAmountAvailable(Payment payment, Double requestedAmount) {
         BigDecimal reserved = refundRepository.findByPaymentIdAndStatuses(
                         payment.getPaymentId(),
                         RESERVED_REFUND_STATUSES
@@ -223,7 +183,7 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
         }
     }
 
-    private void validateIdempotentReplay(Refund existing, CreateRefundCommand command) {
+    private void ensureIdempotentReplayMatches(Refund existing, CreateRefundCommand command) {
         boolean samePayload = existing.getPaymentId().equals(command.getPaymentId())
                 && existing.getRequestedBy().equals(command.getRequestedBy())
                 && Objects.equals(existing.getReason(), command.getReason().trim())

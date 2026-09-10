@@ -26,20 +26,16 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
-    private static final Pattern IDEMPOTENCY_KEY_PATTERN = Pattern.compile("[A-Za-z0-9._:-]{8,128}");
-    private static final double MAX_AMOUNT = 99_999_999_999_999_999D;
-
     private final PaymentRepository paymentRepository;
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final PaymentMapper paymentMapper;
@@ -47,7 +43,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public CreatePaymentResult createPayment(CreatePaymentCommand command) {
-        ValidatedPayment validated = validate(command);
+        CreatePaymentCommand.ValidatedPayment validated = command.validate();
         String requestHash = requestHash(command, validated);
 
         Optional<Payment> existingByKey = paymentRepository.findByIdempotencyKey(validated.idempotencyKey());
@@ -119,7 +115,7 @@ public class PaymentServiceImpl implements PaymentService {
                     "Reference type và ít nhất một reference ID là bắt buộc"
             );
         }
-        if (referenceIds.size() > 100 || referenceIds.stream().anyMatch(java.util.Objects::isNull)) {
+        if (referenceIds.size() > 100 || referenceIds.stream().anyMatch(Objects::isNull)) {
             throw new InvalidPaymentException(
                     "INVALID_REFERENCE_QUERY",
                     "Mỗi truy vấn chỉ hỗ trợ tối đa 100 reference ID hợp lệ"
@@ -183,53 +179,10 @@ public class PaymentServiceImpl implements PaymentService {
         return new CreatePaymentResult(paymentMapper.toPaymentResponseCommand(existing), true);
     }
 
-    private ValidatedPayment validate(CreatePaymentCommand command) {
-        if (command.getPayerId() == null) {
-            throw new InvalidPaymentException("PAYER_REQUIRED", "Không xác định được người thanh toán");
-        }
-        if (command.getReferenceType() == null || command.getReferenceId() == null) {
-            throw new InvalidPaymentException("REFERENCE_REQUIRED", "Reference type và reference ID là bắt buộc");
-        }
-        if (command.getPurpose() == null || !command.getPurpose().supports(command.getReferenceType())) {
-            throw new InvalidPaymentException(
-                    "INVALID_PAYMENT_PURPOSE",
-                    "Purpose không hợp lệ với reference type"
-            );
-        }
-        if (command.getAmount() == null || !Double.isFinite(command.getAmount()) || command.getAmount() <= 0) {
-            throw new InvalidPaymentException("INVALID_AMOUNT", "Amount phải lớn hơn 0");
-        }
-        if (command.getAmount() > MAX_AMOUNT) {
-            throw new InvalidPaymentException("INVALID_AMOUNT", "Amount vượt quá giới hạn cho phép");
-        }
-
-        String currency = command.getCurrency() == null
-                ? ""
-                : command.getCurrency().trim().toUpperCase(Locale.ROOT);
-        if (!"VND".equals(currency)) {
-            throw new InvalidPaymentException("UNSUPPORTED_CURRENCY", "Payment hiện chỉ hỗ trợ VND");
-        }
-
-        String idempotencyKey = command.getIdempotencyKey() == null
-                ? ""
-                : command.getIdempotencyKey().trim();
-        if (!IDEMPOTENCY_KEY_PATTERN.matcher(idempotencyKey).matches()) {
-            throw new InvalidPaymentException(
-                    "INVALID_IDEMPOTENCY_KEY",
-                    "Idempotency-Key phải dài 8-128 ký tự và chỉ chứa chữ, số, '.', '_', ':', '-'"
-            );
-        }
-        String description = command.getDescription() == null ? null : command.getDescription().trim();
-        if (description != null && description.length() > 500) {
-            throw new InvalidPaymentException("INVALID_DESCRIPTION", "Description dài tối đa 500 ký tự");
-        }
-        if (command.getExpiresAt() != null && !command.getExpiresAt().isAfter(java.time.LocalDateTime.now())) {
-            throw new InvalidPaymentException("INVALID_EXPIRES_AT", "ExpiresAt phải nằm trong tương lai");
-        }
-        return new ValidatedPayment(command.getAmount(), currency, description, idempotencyKey);
-    }
-
-    private String requestHash(CreatePaymentCommand command, ValidatedPayment validated) {
+    private String requestHash(
+            CreatePaymentCommand command,
+            CreatePaymentCommand.ValidatedPayment validated
+    ) {
         return sha256(String.join("|",
                 command.getPayerId().toString(),
                 command.getReferenceType().name(),
@@ -269,11 +222,4 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    private record ValidatedPayment(
-            Double amount,
-            String currency,
-            String description,
-            String idempotencyKey
-    ) {
-    }
 }

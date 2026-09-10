@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.HexFormat;
 
 @Component
 public class AesBankAccountProtector implements BankAccountProtector {
@@ -68,7 +69,7 @@ public class AesBankAccountProtector implements BankAccountProtector {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secretBytes(), "HmacSHA256"));
-            return java.util.HexFormat.of().formatHex(
+            return HexFormat.of().formatHex(
                     mac.doFinal((bankBin + ":" + accountNumber).getBytes(StandardCharsets.UTF_8))
             );
         } catch (PaymentProviderException exception) {

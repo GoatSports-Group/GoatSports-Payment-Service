@@ -72,7 +72,7 @@ public class PayOsWebhookServiceImpl implements PayOsWebhookService {
         }
 
         Payment payment = paymentRepository.findByIdForUpdate(attempt.getPaymentId()).orElse(null);
-        String validationError = validate(command, verified, attempt, payment);
+        String validationError = findProcessingError(command, verified, attempt, payment);
         if (validationError != null) {
             log.warn("Rejected verified payOS webhook {}: {}", providerEventId, validationError);
             complete(event, WebhookProcessingStatus.FAILED, validationError, now);
@@ -100,7 +100,7 @@ public class PayOsWebhookServiceImpl implements PayOsWebhookService {
         log.info("Payment {} confirmed automatically by payOS webhook", payment.getPaymentId());
     }
 
-    private String validate(
+    private String findProcessingError(
             PayOsWebhookCommand command,
             VerifiedPayOsWebhook verified,
             PaymentAttempt attempt,

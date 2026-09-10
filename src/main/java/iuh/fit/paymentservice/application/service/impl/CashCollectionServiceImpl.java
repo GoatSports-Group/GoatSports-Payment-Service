@@ -49,7 +49,7 @@ public class CashCollectionServiceImpl implements CashCollectionService {
     @Override
     @Transactional
     public CreatePaymentAttemptResult collect(CollectCashPaymentCommand command) {
-        validateCommand(command);
+        command.validate();
         LocalDateTime now = LocalDateTime.now();
         Payment payment = paymentRepository.findByIdForUpdate(command.getPaymentId())
                 .orElseThrow(() -> new PaymentNotFoundException(command.getPaymentId()));
@@ -65,7 +65,7 @@ public class CashCollectionServiceImpl implements CashCollectionService {
             return result(existingCashCollection.get(), true);
         }
 
-        validatePayment(payment, now);
+        ensurePaymentCollectible(payment, now);
         paymentAttemptRepository.findLatestByPaymentIdAndStatuses(
                 payment.getPaymentId(),
                 ACTIVE_ATTEMPT_STATUSES
@@ -95,16 +95,7 @@ public class CashCollectionServiceImpl implements CashCollectionService {
         return result(cashAttempt, false);
     }
 
-    private void validateCommand(CollectCashPaymentCommand command) {
-        if (command == null || command.getPaymentId() == null || command.getCollectorId() == null) {
-            throw new InvalidPaymentException(
-                    "CASH_COLLECTION_REQUEST_INVALID",
-                    "Payment ID và collector ID là bắt buộc"
-            );
-        }
-    }
-
-    private void validatePayment(Payment payment, LocalDateTime now) {
+    private void ensurePaymentCollectible(Payment payment, LocalDateTime now) {
         if (!COLLECTIBLE_PAYMENT_STATUSES.contains(payment.getStatus())) {
             throw new PaymentConflictException(
                     "PAYMENT_NOT_COLLECTIBLE",

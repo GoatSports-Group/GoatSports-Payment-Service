@@ -47,7 +47,7 @@ public class BookingCashCollectionServiceImpl implements BookingCashCollectionSe
                     .build());
             paymentId = created.getPayment().getPaymentId();
         } else {
-            validateExisting(existing, command);
+            ensureExistingMatches(existing, command);
             paymentId = existing.getPaymentId();
         }
 
@@ -61,7 +61,7 @@ public class BookingCashCollectionServiceImpl implements BookingCashCollectionSe
                 .orElseThrow(() -> new PaymentNotFoundException(paymentId));
     }
 
-    private void validateExisting(Payment payment, CollectBookingCashCommand command) {
+    private void ensureExistingMatches(Payment payment, CollectBookingCashCommand command) {
         if (!payment.getPayerId().equals(command.payerId())
                 || Math.abs(payment.getAmount() - command.amount()) >= 0.01
                 || !payment.getCurrency().equalsIgnoreCase(command.currency())) {

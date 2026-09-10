@@ -3,6 +3,7 @@ package iuh.fit.paymentservice.application.service.impl;
 import iuh.fit.paymentservice.application.dto.request.payout.CreatePayoutCommand;
 import iuh.fit.paymentservice.application.dto.response.payout.ProviderPayoutResult;
 import iuh.fit.paymentservice.application.exception.PaymentAccessDeniedException;
+import iuh.fit.paymentservice.application.exception.PaymentApplicationException;
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.exception.PaymentNotFoundException;
 import iuh.fit.paymentservice.application.port.client.PayoutProviderPort;
@@ -153,7 +154,7 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
                     bankAccountProtector.decrypt(account.getAccountNumberEncrypted()),
                     "Hoan tien GoatSports"
             ));
-        } catch (iuh.fit.paymentservice.application.exception.PaymentApplicationException exception) {
+        } catch (PaymentApplicationException exception) {
             payout.setStatus(PayoutStatus.FAILED);
             payout.setFailureCode(exception.getCode());
             payout.setFailureReason(exception.getMessage());

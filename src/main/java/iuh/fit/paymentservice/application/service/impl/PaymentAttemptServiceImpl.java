@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -44,11 +45,11 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
     @Override
     @Transactional(noRollbackFor = PaymentProviderException.class)
     public CreatePaymentAttemptResult createPaymentAttempt(CreatePaymentAttemptCommand command) {
-        validateCommand(command);
+        command.validate();
         LocalDateTime now = LocalDateTime.now();
         Payment payment = paymentRepository.findByIdForUpdate(command.getPaymentId())
                 .orElseThrow(() -> new PaymentNotFoundException(command.getPaymentId()));
-        validatePayment(payment, command, now);
+        ensurePaymentPayable(payment, command, now);
 
         var activeAttempt = paymentAttemptRepository.findLatestByPaymentIdAndStatuses(
                 payment.getPaymentId(), ACTIVE_ATTEMPT_STATUSES
@@ -128,30 +129,7 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
         return paymentAttempt;
     }
 
-    private void validateCommand(CreatePaymentAttemptCommand command) {
-        if (command == null || command.getPaymentId() == null || command.getPayerId() == null) {
-            throw new InvalidPaymentException(
-                    "PAYMENT_ATTEMPT_REQUEST_INVALID",
-                    "Payment ID và payer ID là bắt buộc"
-            );
-        }
-        if (command.getMethod() != PaymentMethod.BANK_TRANSFER) {
-            throw new InvalidPaymentException(
-                    "UNSUPPORTED_PAYMENT_METHOD",
-                    "payOS chỉ hỗ trợ phương thức BANK_TRANSFER"
-            );
-        }
-        if (command.getIpAddress() == null
-                || command.getIpAddress().isBlank()
-                || command.getIpAddress().length() > 45) {
-            throw new InvalidPaymentException(
-                    "PAYOS_INVALID_IP_ADDRESS",
-                    "Địa chỉ IP thanh toán không hợp lệ"
-            );
-        }
-    }
-
-    private void validatePayment(
+    private void ensurePaymentPayable(
             Payment payment,
             CreatePaymentAttemptCommand command,
             LocalDateTime now
@@ -175,7 +153,7 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
         }
     }
 
-    static long providerOrderCode(java.util.UUID attemptId) {
+    static long providerOrderCode(UUID attemptId) {
         long mixed = attemptId.getMostSignificantBits() ^ attemptId.getLeastSignificantBits();
         return Math.floorMod(mixed, 8_000_000_000_000_000L) + 1_000_000_000_000_000L;
     }

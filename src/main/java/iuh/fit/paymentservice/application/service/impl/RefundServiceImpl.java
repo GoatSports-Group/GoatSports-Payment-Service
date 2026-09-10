@@ -5,7 +5,9 @@ import iuh.fit.paymentservice.application.dto.request.refund.CompleteManualRefun
 import iuh.fit.paymentservice.application.dto.response.refund.CreateRefundResult;
 import iuh.fit.paymentservice.application.dto.response.refund.PreparedRefundResult;
 import iuh.fit.paymentservice.application.dto.response.refund.RefundResponseCommand;
+import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.mapper.RefundMapper;
+import iuh.fit.paymentservice.application.service.RefundDisbursementService;
 import iuh.fit.paymentservice.application.service.RefundService;
 import iuh.fit.paymentservice.application.service.RefundTransactionService;
 import iuh.fit.paymentservice.domain.entity.Refund;
@@ -13,12 +15,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class RefundServiceImpl implements RefundService {
     private final RefundTransactionService refundTransactionService;
     private final RefundMapper refundMapper;
-    private final iuh.fit.paymentservice.application.service.RefundDisbursementService refundDisbursementService;
+    private final RefundDisbursementService refundDisbursementService;
 
     @Override
     public CreateRefundResult createRefund(CreateRefundCommand command) {
@@ -33,7 +37,7 @@ public class RefundServiceImpl implements RefundService {
             try {
                 refundDisbursementService.processAutomaticRefund(refund.getRefundId());
                 refund = refundTransactionService.findById(refund.getRefundId());
-            } catch (iuh.fit.paymentservice.application.exception.PaymentConflictException exception) {
+            } catch (PaymentConflictException exception) {
                 if (!"BANK_ACCOUNT_REQUIRED".equals(exception.getCode())) throw exception;
             }
         }
@@ -46,7 +50,7 @@ public class RefundServiceImpl implements RefundService {
     }
 
     @Override
-    public RefundResponseCommand claim(java.util.UUID refundId, java.util.UUID payerId) {
+    public RefundResponseCommand claim(UUID refundId, UUID payerId) {
         return refundMapper.toRefundResponseCommand(refundDisbursementService.claim(refundId, payerId));
     }
 

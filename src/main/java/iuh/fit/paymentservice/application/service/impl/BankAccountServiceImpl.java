@@ -2,7 +2,6 @@ package iuh.fit.paymentservice.application.service.impl;
 
 import iuh.fit.paymentservice.application.dto.request.bankaccount.LinkBankAccountCommand;
 import iuh.fit.paymentservice.application.dto.response.bankaccount.BankAccountResponseCommand;
-import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.exception.PaymentAccessDeniedException;
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.port.persistence.BankAccountRepository;
@@ -22,14 +21,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class BankAccountServiceImpl implements BankAccountService {
-    private static final Pattern BIN_PATTERN = Pattern.compile("\\d{6,12}");
-    private static final Pattern ACCOUNT_PATTERN = Pattern.compile("\\d{6,19}");
-
     private final BankAccountRepository bankAccountRepository;
     private final BankAccountProtector bankAccountProtector;
     private final RefundDisbursementService refundDisbursementService;
@@ -42,7 +37,7 @@ public class BankAccountServiceImpl implements BankAccountService {
     @Override
     @Transactional
     public BankAccountResponseCommand link(LinkBankAccountCommand command) {
-        validate(command);
+        command.validate();
         String bankBin = command.bankBin().trim();
         String accountNumber = command.accountNumber().replaceAll("\\s+", "");
         String hash = bankAccountProtector.hash(bankBin, accountNumber);
@@ -103,20 +98,6 @@ public class BankAccountServiceImpl implements BankAccountService {
             throw new PaymentAccessDeniedException();
         }
         return account;
-    }
-
-    private void validate(LinkBankAccountCommand command) {
-        if (command == null || command.payeeId() == null
-                || command.bankBin() == null || !BIN_PATTERN.matcher(command.bankBin().trim()).matches()
-                || command.accountNumber() == null
-                || !ACCOUNT_PATTERN.matcher(command.accountNumber().replaceAll("\\s+", "")).matches()
-                || command.accountName() == null || command.accountName().isBlank()
-                || command.accountName().trim().length() > 255) {
-            throw new InvalidPaymentException(
-                    "BANK_ACCOUNT_INVALID",
-                    "Ngân hàng, số tài khoản và tên chủ tài khoản không hợp lệ"
-            );
-        }
     }
 
     private String normalizeName(String accountName) {
