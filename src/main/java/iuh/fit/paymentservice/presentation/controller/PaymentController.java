@@ -5,6 +5,7 @@ import iuh.fit.paymentservice.application.dto.response.payment.PaymentResponseCo
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.port.security.CurrentUserProvider;
 import iuh.fit.paymentservice.application.service.PaymentService;
+import iuh.fit.paymentservice.application.service.PaymentReconciliationService;
 import iuh.fit.paymentservice.presentation.converter.PaymentConverter;
 import iuh.fit.paymentservice.presentation.request.CreatePaymentRequest;
 import iuh.fit.paymentservice.presentation.response.PaymentResponse;
@@ -27,6 +28,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentController {
     private final PaymentService paymentService;
+    private final PaymentReconciliationService paymentReconciliationService;
     private final CurrentUserProvider currentUserProvider;
     private final PaymentConverter paymentConverter;
 
@@ -46,6 +48,18 @@ public class PaymentController {
     @GetMapping("/{paymentId}")
     public ResponseEntity<PaymentResponse> getPayment(@PathVariable UUID paymentId) {
         PaymentResponseCommand result = paymentService.getPayment(paymentId, authenticatedUserId());
+        return ResponseEntity.ok(paymentConverter.toResponse(result));
+    }
+
+    @PostMapping("/{paymentId}/cancel")
+    public ResponseEntity<PaymentResponse> cancelPayment(@PathVariable UUID paymentId) {
+        UUID payerUserId = authenticatedUserId();
+        paymentReconciliationService.cancel(
+                paymentId,
+                payerUserId,
+                "Người dùng hủy tại màn hình thanh toán"
+        );
+        PaymentResponseCommand result = paymentService.getPayment(paymentId, payerUserId);
         return ResponseEntity.ok(paymentConverter.toResponse(result));
     }
 

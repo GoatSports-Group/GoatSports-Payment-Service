@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentReconciliationServiceImplTests {
@@ -99,6 +100,46 @@ class PaymentReconciliationServiceImplTests {
         assertThat(data.payment().getStatus()).isEqualTo(PaymentStatus.CANCELLED);
     }
 
+    @Test
+    void cancelsActivePaymentAndPublishesResult() {
+        TestData data = data(LocalDateTime.now().plusMinutes(5));
+        when(paymentAttemptRepository.findLatestByPaymentIdAndStatuses(
+                data.payment().getPaymentId(),
+                java.util.EnumSet.of(PaymentAttemptStatus.REDIRECT_READY, PaymentAttemptStatus.PENDING)
+        )).thenReturn(Optional.of(data.attempt()));
+        when(paymentStatusProviderPort.cancel(data.paymentLinkId(), "Người dùng hủy"))
+                .thenReturn(result(
+                        data, ProviderPaymentStatusResult.Status.CANCELLED, 0L,
+                        "PAYOS_CANCELLED", "Người dùng hủy"
+                ));
+
+        service.cancel(data.payment().getPaymentId(), data.payment().getPayerId(), "Người dùng hủy");
+
+        assertThat(data.attempt().getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
+        assertThat(data.payment().getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+        verify(paymentDomainEventService).recordPaymentResult(
+                data.payment(), data.attempt(), data.payment().getPayerId()
+        );
+    }
+
+    @Test
+    void recordsSuccessWhenPaymentCompletesDuringCancellation() {
+        TestData data = data(LocalDateTime.now().plusMinutes(5));
+        when(paymentAttemptRepository.findLatestByPaymentIdAndStatuses(
+                data.payment().getPaymentId(),
+                java.util.EnumSet.of(PaymentAttemptStatus.REDIRECT_READY, PaymentAttemptStatus.PENDING)
+        )).thenReturn(Optional.of(data.attempt()));
+        when(paymentStatusProviderPort.cancel(data.paymentLinkId(), "Người dùng hủy"))
+                .thenReturn(result(
+                        data, ProviderPaymentStatusResult.Status.PAID, 30_000L, null, null
+                ));
+
+        service.cancel(data.payment().getPaymentId(), data.payment().getPayerId(), "Người dùng hủy");
+
+        assertThat(data.attempt().getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
+        assertThat(data.payment().getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+    }
+
     private TestData data(LocalDateTime expiresAt) {
         UUID attemptId = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
@@ -107,6 +148,8 @@ class PaymentReconciliationServiceImplTests {
                 .attemptId(attemptId)
                 .paymentId(paymentId)
                 .providerTransactionId(paymentLinkId)
+                .provider(iuh.fit.paymentservice.domain.enums.PaymentProvider.PAYOS)
+                .method(iuh.fit.paymentservice.domain.enums.PaymentMethod.BANK_TRANSFER)
                 .status(PaymentAttemptStatus.PENDING)
                 .build();
         Payment payment = Payment.builder()
@@ -116,7 +159,7 @@ class PaymentReconciliationServiceImplTests {
                 .status(PaymentStatus.PENDING)
                 .expiresAt(expiresAt)
                 .build();
-        when(paymentAttemptRepository.findByIdForUpdate(attemptId)).thenReturn(Optional.of(attempt));
+        lenient().when(paymentAttemptRepository.findByIdForUpdate(attemptId)).thenReturn(Optional.of(attempt));
         when(paymentRepository.findByIdForUpdate(paymentId)).thenReturn(Optional.of(payment));
         return new TestData(attempt, payment, paymentLinkId);
     }

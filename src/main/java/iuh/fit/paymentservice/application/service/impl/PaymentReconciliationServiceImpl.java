@@ -2,6 +2,9 @@ package iuh.fit.paymentservice.application.service.impl;
 
 import iuh.fit.paymentservice.application.dto.response.payment.ProviderPaymentStatusResult;
 import iuh.fit.paymentservice.application.exception.PaymentProviderException;
+import iuh.fit.paymentservice.application.exception.PaymentAccessDeniedException;
+import iuh.fit.paymentservice.application.exception.PaymentConflictException;
+import iuh.fit.paymentservice.application.exception.PaymentNotFoundException;
 import iuh.fit.paymentservice.application.port.client.PaymentStatusProviderPort;
 import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
@@ -92,6 +95,67 @@ public class PaymentReconciliationServiceImpl implements PaymentReconciliationSe
                     providerResult.failureCode(), providerResult.failureReason(), now
             );
             case PENDING, PROCESSING -> paymentAttemptRepository.save(attempt);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void cancel(UUID paymentId, UUID payerUserId, String reason) {
+        Payment payment = paymentRepository.findByIdForUpdate(paymentId)
+                .orElseThrow(() -> new PaymentNotFoundException(paymentId));
+        if (!payment.getPayerId().equals(payerUserId)) {
+            throw new PaymentAccessDeniedException();
+        }
+        if (payment.getStatus() == PaymentStatus.CANCELLED
+                || payment.getStatus() == PaymentStatus.EXPIRED) {
+            return;
+        }
+        if (payment.getStatus() == PaymentStatus.SUCCEEDED
+                || payment.getStatus() == PaymentStatus.PARTIALLY_REFUNDED
+                || payment.getStatus() == PaymentStatus.REFUNDED) {
+            throw new PaymentConflictException(
+                    "PAYMENT_ALREADY_COMPLETED",
+                    "Khoản thanh toán đã hoàn tất nên không thể hủy"
+            );
+        }
+
+        PaymentAttempt attempt = paymentAttemptRepository.findLatestByPaymentIdAndStatuses(
+                paymentId, RECONCILABLE_ATTEMPT_STATUSES
+        ).orElseThrow(() -> new PaymentConflictException(
+                "PAYMENT_ATTEMPT_NOT_CANCELLABLE",
+                "Không tìm thấy mã thanh toán đang hoạt động để hủy"
+        ));
+        if (attempt.getProviderTransactionId() == null || attempt.getProviderTransactionId().isBlank()) {
+            throw new PaymentConflictException(
+                    "PAYMENT_PROVIDER_REFERENCE_MISSING",
+                    "Mã giao dịch payOS chưa sẵn sàng để hủy"
+            );
+        }
+
+        ProviderPaymentStatusResult providerResult = paymentStatusProviderPort.cancel(
+                attempt.getProviderTransactionId(), truncate(reason, 120)
+        );
+        ensureProviderIdentityMatches(attempt, payment, providerResult);
+
+        LocalDateTime now = LocalDateTime.now();
+        switch (providerResult.status()) {
+            case PAID -> markSucceeded(attempt, payment, providerResult, now);
+            case CANCELLED -> markTerminal(
+                    attempt, payment, PaymentAttemptStatus.FAILED, PaymentStatus.CANCELLED,
+                    providerResult.failureCode(), providerResult.failureReason(), now
+            );
+            case EXPIRED -> markTerminal(
+                    attempt, payment, PaymentAttemptStatus.EXPIRED, PaymentStatus.EXPIRED,
+                    providerResult.failureCode(), providerResult.failureReason(), now
+            );
+            case FAILED, UNDERPAID -> markTerminal(
+                    attempt, payment, PaymentAttemptStatus.FAILED, PaymentStatus.FAILED,
+                    providerResult.failureCode(), providerResult.failureReason(), now
+            );
+            case PENDING, PROCESSING -> throw new PaymentProviderException(
+                    "PAYOS_CANCEL_PENDING",
+                    "payOS chưa xác nhận hủy giao dịch"
+            );
         }
     }
 
