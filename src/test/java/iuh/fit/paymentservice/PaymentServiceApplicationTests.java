@@ -227,7 +227,6 @@ class PaymentServiceApplicationTests {
         assertThat(Arrays.stream(PaymentPurpose.values()).map(Enum::name)).containsExactly(
                 "BOOKING_DEPOSIT",
                 "BOOKING_REMAINING",
-                "CLUB_FEE",
                 "TOURNAMENT_FEE"
         );
     }
@@ -364,7 +363,7 @@ class PaymentServiceApplicationTests {
     void referenceAndPurposeCannotCreateDuplicatePayment() throws Exception {
         UUID payerUserId = UUID.randomUUID();
         UUID referenceId = UUID.randomUUID();
-        String body = paymentBody("CLUB_FEE", referenceId, "CLUB_FEE", "50000", "vnd");
+        String body = paymentBody("TOURNAMENT_REGISTRATION", referenceId, "TOURNAMENT_FEE", "50000", "vnd");
 
         TestHttpResponse created = request(
                 "POST",
@@ -393,7 +392,7 @@ class PaymentServiceApplicationTests {
                 paymentBody(
                         "TOURNAMENT_REGISTRATION",
                         UUID.randomUUID(),
-                        "CLUB_FEE",
+                        "BOOKING_DEPOSIT",
                         "75000",
                         "VND"
                 )
@@ -479,7 +478,7 @@ class PaymentServiceApplicationTests {
                 "POST",
                 "/api/v1/payments",
                 gatewayHeaders(payerUserId, "pay-test-" + UUID.randomUUID()),
-                paymentBody("CLUB_FEE", UUID.randomUUID(), "CLUB_FEE", "50000", "VND")
+                paymentBody("BOOKING", UUID.randomUUID(), "BOOKING_DEPOSIT", "50000", "VND")
         );
         UUID paymentId = extractPaymentId(paymentResponse.body());
 
