@@ -38,6 +38,12 @@ public class PaymentController {
             @Valid @RequestBody CreatePaymentRequest request
     ) {
         UUID payerUserId = authenticatedUserId();
+        // Le phi giai dau do club-service tinh va khoi tao (/internal/payments/tournament-fee-checkouts);
+        // cho client tu gui so tien la de nguoi choi tu dat muc phi cho minh.
+        if (request.getPurpose() == iuh.fit.paymentservice.domain.enums.PaymentPurpose.TOURNAMENT_FEE) {
+            throw new InvalidPaymentException("SERVER_PRICED_PAYMENT",
+                    "Lệ phí giải đấu chỉ được khởi tạo từ trang giải đấu");
+        }
         CreatePaymentResult result = paymentService.createPayment(
                 paymentConverter.toCommand(payerUserId, idempotencyKey, request)
         );

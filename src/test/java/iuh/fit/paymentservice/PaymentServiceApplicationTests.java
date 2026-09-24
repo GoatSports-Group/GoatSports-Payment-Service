@@ -363,7 +363,7 @@ class PaymentServiceApplicationTests {
     void referenceAndPurposeCannotCreateDuplicatePayment() throws Exception {
         UUID payerUserId = UUID.randomUUID();
         UUID referenceId = UUID.randomUUID();
-        String body = paymentBody("TOURNAMENT_REGISTRATION", referenceId, "TOURNAMENT_FEE", "50000", "vnd");
+        String body = paymentBody("BOOKING", referenceId, "BOOKING_DEPOSIT", "50000", "vnd");
 
         TestHttpResponse created = request(
                 "POST",
@@ -381,6 +381,19 @@ class PaymentServiceApplicationTests {
         );
         assertThat(conflict.status()).isEqualTo(409);
         assertThat(conflict.body()).contains("\"code\":\"PAYMENT_ALREADY_EXISTS\"");
+    }
+
+    @Test
+    void tournamentFeeCannotBeCreatedWithClientSuppliedAmount() throws Exception {
+        TestHttpResponse response = request(
+                "POST",
+                "/api/v1/payments",
+                gatewayHeaders(UUID.randomUUID(), "pay-test-" + UUID.randomUUID()),
+                paymentBody("TOURNAMENT_REGISTRATION", UUID.randomUUID(), "TOURNAMENT_FEE", "1000", "VND")
+        );
+
+        assertThat(response.status()).isEqualTo(400);
+        assertThat(response.body()).contains("\"code\":\"SERVER_PRICED_PAYMENT\"");
     }
 
     @Test

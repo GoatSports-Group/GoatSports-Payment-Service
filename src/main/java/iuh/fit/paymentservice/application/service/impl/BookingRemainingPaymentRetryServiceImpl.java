@@ -40,7 +40,7 @@ public class BookingRemainingPaymentRetryServiceImpl implements BookingRemaining
         if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
             throw new PaymentConflictException(
                     "BOOKING_PAYMENT_ALREADY_PAID",
-                    "Số tiền còn lại của booking đã được thanh toán"
+                    "Khoản này đã được thanh toán"
             );
         }
         if (payment.getStatus() == PaymentStatus.PARTIALLY_REFUNDED
@@ -76,12 +76,16 @@ public class BookingRemainingPaymentRetryServiceImpl implements BookingRemaining
         return paymentRepository.save(payment);
     }
 
+    /** Chi hai loai thu tien do server tinh gia moi tao lai ma: phan con lai cua booking va le phi giai dau. */
     private void ensureBookingRemaining(Payment payment) {
-        if (payment.getReferenceType() != PaymentReferenceType.BOOKING
-                || payment.getPurpose() != PaymentPurpose.BOOKING_REMAINING) {
+        boolean bookingRemaining = payment.getReferenceType() == PaymentReferenceType.BOOKING
+                && payment.getPurpose() == PaymentPurpose.BOOKING_REMAINING;
+        boolean tournamentFee = payment.getReferenceType() == PaymentReferenceType.TOURNAMENT_REGISTRATION
+                && payment.getPurpose() == PaymentPurpose.TOURNAMENT_FEE;
+        if (!bookingRemaining && !tournamentFee) {
             throw new PaymentConflictException(
                     "PAYMENT_RETRY_NOT_ALLOWED",
-                    "Chỉ payment phần còn lại của booking mới được phép tạo lại mã thanh toán"
+                    "Chỉ phần còn lại của booking hoặc lệ phí giải đấu mới được tạo lại mã thanh toán"
             );
         }
     }
