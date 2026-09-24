@@ -43,6 +43,8 @@ public class GatewayAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
+        // Chỉ gateway biết secret này và nó đã xóa mọi X-User-* do client tự gửi, nên các header danh tính
+        // bên dưới mới đáng tin. Request đi thẳng vào service (không qua gateway) bị chặn ở đây.
         String suppliedSecret = request.getHeader("X-Gateway-Secret");
         if (!isValidSecret(suppliedSecret)) {
             response.setStatus(HttpStatus.FORBIDDEN.value());

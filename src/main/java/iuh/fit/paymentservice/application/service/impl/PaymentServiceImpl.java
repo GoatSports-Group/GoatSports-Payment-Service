@@ -41,6 +41,11 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentMapper paymentMapper;
     private final PaymentCreationTransactionService paymentCreationTransactionService;
 
+    /**
+     * Tạo payment idempotent: cùng Idempotency-Key + cùng nội dung thì trả lại payment cũ (client gửi lại an toàn),
+     * cùng key nhưng khác nội dung thì báo xung đột. Mỗi (reference, purpose) chỉ có MỘT payment — ví dụ một booking
+     * chỉ có một khoản cọc — nên không thể thu hai lần cho cùng một mục đích.
+     */
     @Override
     public CreatePaymentResult createPayment(CreatePaymentCommand command) {
         CreatePaymentCommand.ValidatedPayment validated = command.validate();
@@ -84,6 +89,8 @@ public class PaymentServiceImpl implements PaymentService {
             Payment savedPayment = paymentCreationTransactionService.create(payment);
             return new CreatePaymentResult(paymentMapper.toPaymentResponseCommand(savedPayment), false);
         } catch (DataIntegrityViolationException exception) {
+            // Hai request cùng lúc cùng qua bước kiểm tra ở trên: unique constraint của DB là chốt chặn cuối,
+            // request thua đọc lại bản đã tạo để trả kết quả nhất quán.
             return resolveConcurrentCreate(command, validated.idempotencyKey(), requestHash);
         }
     }

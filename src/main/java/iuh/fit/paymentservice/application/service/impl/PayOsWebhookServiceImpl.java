@@ -34,6 +34,13 @@ public class PayOsWebhookServiceImpl implements PayOsWebhookService {
     private final PaymentRepository paymentRepository;
     private final PaymentDomainEventService paymentDomainEventService;
 
+    /**
+     * Xác nhận thanh toán tự động từ webhook payOS. Thứ tự kiểm tra có chủ đích:
+     * 1) verify chữ ký trước khi tin bất kỳ trường nào (webhook là endpoint công khai, ai cũng gọi được);
+     * 2) chống xử lý trùng theo providerEventId — payOS gửi lại webhook khi timeout;
+     * 3) khóa attempt + payment (FOR UPDATE) rồi đối chiếu orderCode, số tiền, tiền tệ với dữ liệu của chính mình,
+     *    không bao giờ lấy số tiền từ webhook làm số tiền đã thu.
+     */
     @Override
     @Transactional
     public void process(PayOsWebhookCommand command) {
@@ -65,6 +72,7 @@ public class PayOsWebhookServiceImpl implements PayOsWebhookService {
                 .receivedAt(now)
                 .build());
 
+        // Lưu sự kiện kể cả khi bỏ qua/từ chối: vừa là dấu chống trùng, vừa để đối soát khi có khiếu nại.
         if (attempt == null) {
             complete(event, WebhookProcessingStatus.IGNORED,
                     "Không tìm thấy attempt; có thể là webhook mẫu khi đăng ký", now);
@@ -136,6 +144,7 @@ public class PayOsWebhookServiceImpl implements PayOsWebhookService {
         return null;
     }
 
+    /** payOS tính bằng đồng (số nguyên); số tiền có phần lẻ thì coi như không khớp thay vì làm tròn. */
     private long providerAmount(Double amount) {
         try {
             return BigDecimal.valueOf(amount)
