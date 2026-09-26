@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd">
+
+    <changeSet id="20260926-01-create-payment-event-outbox" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="payment_event_outbox"/>
+            </not>
+        </preConditions>
+        <comment>Transactional outbox: su kien thanh toan/hoan tien ghi cung giao dich nghiep vu, job gui Kafka sau</comment>
+        <createTable tableName="payment_event_outbox">
+            <column name="event_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_payment_event_outbox"/>
+            </column>
+            <column name="event_type" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message_key" type="VARCHAR(100)"/>
+            <column name="payload" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="published_at" type="TIMESTAMP"/>
+            <column name="attempts" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_error" type="VARCHAR(1000)"/>
+        </createTable>
+        <createIndex tableName="payment_event_outbox" indexName="idx_payment_event_outbox_pending">
+            <column name="published_at"/>
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

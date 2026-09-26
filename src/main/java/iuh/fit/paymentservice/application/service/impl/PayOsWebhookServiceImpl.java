@@ -94,6 +94,10 @@ public class PayOsWebhookServiceImpl implements PayOsWebhookService {
             return;
         }
 
+        if (payment.getStatus() != PaymentStatus.CREATED && payment.getStatus() != PaymentStatus.PENDING) {
+            log.warn("Tiền về trễ cho payment {} đang ở trạng thái {}: ghi nhận đã thanh toán để hoàn lại",
+                    payment.getPaymentId(), payment.getStatus());
+        }
         attempt.setStatus(PaymentAttemptStatus.SUCCEEDED);
         attempt.setFailureCode(null);
         attempt.setFailureReason(null);
@@ -130,17 +134,12 @@ public class PayOsWebhookServiceImpl implements PayOsWebhookService {
         if (!"VND".equalsIgnoreCase(verified.currency())) {
             return "Tiền tệ payOS không hợp lệ";
         }
-        if (payment.getStatus() != PaymentStatus.CREATED
-                && payment.getStatus() != PaymentStatus.PENDING
-                && payment.getStatus() != PaymentStatus.SUCCEEDED) {
-            return "Payment không còn ở trạng thái có thể xác nhận";
+        // Đã hoàn tiền thì khoản này đã khép sổ; tiền về thêm lần nữa là bất thường, để xử lý tay.
+        if (payment.getStatus() == PaymentStatus.REFUNDED || payment.getStatus() == PaymentStatus.PARTIALLY_REFUNDED) {
+            return "Payment đã được hoàn tiền trước đó";
         }
-        if (attempt.getStatus() != PaymentAttemptStatus.CREATED
-                && attempt.getStatus() != PaymentAttemptStatus.REDIRECT_READY
-                && attempt.getStatus() != PaymentAttemptStatus.PENDING
-                && attempt.getStatus() != PaymentAttemptStatus.SUCCEEDED) {
-            return "Attempt không còn ở trạng thái có thể xác nhận";
-        }
+        // EXPIRED / CANCELLED / FAILED vẫn nhận: tiền đã thật sự vào tài khoản (chữ ký, orderCode, số tiền đều khớp).
+        // Từ chối ở đây là người chơi mất tiền; ghi nhận SUCCEEDED để service nghiệp vụ tự hoàn khi đơn không còn hiệu lực.
         return null;
     }
 

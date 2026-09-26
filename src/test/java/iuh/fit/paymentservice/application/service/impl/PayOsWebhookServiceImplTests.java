@@ -91,6 +91,30 @@ class PayOsWebhookServiceImplTests {
     }
 
     @Test
+    void lateMoneyForExpiredPaymentIsRecordedSoTheOwnerServiceCanRefundIt() {
+        UUID attemptId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID payerId = UUID.randomUUID();
+        PayOsWebhookCommand command = command();
+        when(verificationPort.verify(command)).thenReturn(verified(PaymentAttemptServiceImpl.providerOrderCode(attemptId)));
+        PaymentAttempt attempt = PaymentAttempt.builder().attemptId(attemptId).paymentId(paymentId)
+                .provider(PaymentProvider.PAYOS).method(PaymentMethod.BANK_TRANSFER)
+                .providerTransactionId("payment-link-1").status(PaymentAttemptStatus.EXPIRED).build();
+        Payment payment = Payment.builder().paymentId(paymentId).payerId(payerId).amount(100_000D).currency("VND")
+                .status(PaymentStatus.EXPIRED).build();
+        when(attemptRepository.findByProviderAndProviderTransactionIdForUpdate(PaymentProvider.PAYOS, "payment-link-1"))
+                .thenReturn(Optional.of(attempt));
+        when(paymentRepository.findByIdForUpdate(paymentId)).thenReturn(Optional.of(payment));
+        when(attemptRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.process(command);
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+        verify(eventService).recordPaymentResult(payment, attempt, payerId);
+    }
+
+    @Test
     void registrationSampleWithoutMatchingAttemptIsAcknowledgedAndIgnored() {
         PayOsWebhookCommand command = command();
         when(verificationPort.verify(command)).thenReturn(verified(123L));
