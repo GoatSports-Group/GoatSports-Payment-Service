@@ -106,7 +106,7 @@ class PaymentDomainEventServiceImplTests {
                 .refundedAt(status == RefundStatus.SUCCEEDED ? LocalDateTime.now() : null)
                 .build();
 
-        service.recordRefundResult(refund, PaymentStatus.PARTIALLY_REFUNDED);
+        service.recordRefundResult(refund, PaymentStatus.PARTIALLY_REFUNDED, UUID.randomUUID());
 
         DomainEventEnvelope event = capturedEvent();
         String expectedType = switch (status) {
@@ -142,7 +142,7 @@ class PaymentDomainEventServiceImplTests {
                 .build();
 
         service.recordPaymentResult(payment, attempt, UUID.randomUUID());
-        service.recordRefundResult(refund, PaymentStatus.SUCCEEDED);
+        service.recordRefundResult(refund, PaymentStatus.SUCCEEDED, UUID.randomUUID());
 
         verify(eventPublisherPort, never()).publish(org.mockito.ArgumentMatchers.any());
     }

@@ -149,7 +149,7 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
                 : PaymentStatus.PARTIALLY_REFUNDED;
         payment.setStatus(paymentStatus);
         paymentRepository.save(payment);
-        paymentDomainEventService.recordRefundResult(saved, paymentStatus);
+        paymentDomainEventService.recordRefundResult(saved, paymentStatus, payment.getPayerId());
         return saved;
     }
 

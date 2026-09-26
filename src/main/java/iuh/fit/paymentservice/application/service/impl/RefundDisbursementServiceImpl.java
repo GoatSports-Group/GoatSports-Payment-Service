@@ -162,7 +162,7 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
             refund.setStatus(RefundStatus.FAILED);
             refund.setFailureReason(exception.getMessage());
             Refund failed = refundRepository.save(refund);
-            paymentDomainEventService.recordRefundResult(failed, payment.getStatus());
+            paymentDomainEventService.recordRefundResult(failed, payment.getStatus(), payment.getPayerId());
             return failed;
         }
         payout.setProviderPayoutId(result.providerPayoutId());
@@ -219,7 +219,7 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
         }
         Refund saved = refundRepository.save(refund);
         if (saved.getStatus() == RefundStatus.SUCCEEDED) updatePaymentRefundedAmount(payment);
-        paymentDomainEventService.recordRefundResult(saved, payment.getStatus());
+        paymentDomainEventService.recordRefundResult(saved, payment.getStatus(), payment.getPayerId());
         return saved;
     }
 

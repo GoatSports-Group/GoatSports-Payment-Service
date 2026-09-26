@@ -10,5 +10,5 @@ import java.util.UUID;
 public interface PaymentDomainEventService {
     void recordPaymentResult(Payment payment, PaymentAttempt attempt, UUID actorId);
 
-    void recordRefundResult(Refund refund, PaymentStatus paymentStatus);
+    void recordRefundResult(Refund refund, PaymentStatus paymentStatus, UUID payerId);
 }

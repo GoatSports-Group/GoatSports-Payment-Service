@@ -63,7 +63,7 @@ public class PaymentDomainEventServiceImpl implements PaymentDomainEventService 
     }
 
     @Override
-    public void recordRefundResult(Refund refund, PaymentStatus paymentStatus) {
+    public void recordRefundResult(Refund refund, PaymentStatus paymentStatus, UUID payerId) {
         String eventType = switch (refund.getStatus()) {
             case SUCCEEDED -> REFUND_SUCCEEDED;
             case FAILED -> REFUND_FAILED;
@@ -85,7 +85,8 @@ public class PaymentDomainEventServiceImpl implements PaymentDomainEventService 
                 refund.getStatus(),
                 paymentStatus,
                 refund.getFailureReason(),
-                refund.getRefundedAt()
+                refund.getRefundedAt(),
+                payerId
         );
         append(eventType, refund.getRefundId(), refund.getPaymentId(), refund.getRequestedBy(), payload);
     }

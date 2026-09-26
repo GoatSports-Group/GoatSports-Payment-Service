@@ -105,7 +105,7 @@ class RefundDisbursementServiceImplTests {
 
         assertThat(result.getStatus()).isEqualTo(RefundStatus.FAILED);
         assertThat(result.getFailureReason()).isEqualTo("Địa chỉ IP không được phép truy cập hệ thống");
-        verify(paymentDomainEventService).recordRefundResult(result, PaymentStatus.SUCCEEDED);
+        verify(paymentDomainEventService).recordRefundResult(eq(result), eq(PaymentStatus.SUCCEEDED), any());
     }
 
     @Test
@@ -220,6 +220,6 @@ class RefundDisbursementServiceImplTests {
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.AWAITING_BANK_ACCOUNT);
         assertThat(refund.getFailureReason()).isEqualTo("Không tìm thấy tài khoản nhận chi");
         verify(bankAccountRepository).save(account);
-        verify(paymentDomainEventService).recordRefundResult(refund, PaymentStatus.SUCCEEDED);
+        verify(paymentDomainEventService).recordRefundResult(eq(refund), eq(PaymentStatus.SUCCEEDED), any());
     }
 }

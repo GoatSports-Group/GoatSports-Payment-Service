@@ -16,6 +16,7 @@ public record RefundEventPayload(
     RefundStatus status,
     PaymentStatus paymentStatus,
     String failureReason,
-    LocalDateTime refundedAt
+    LocalDateTime refundedAt,
+    UUID payerId
 ) {
 }
