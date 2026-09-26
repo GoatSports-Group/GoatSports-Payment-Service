@@ -55,6 +55,9 @@ public class RefundEntity extends BaseEntity {
     private RefundStatus status;
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
+    @Column(name = "retry_count", nullable = false)
+    @lombok.Builder.Default
+    private Integer retryCount = 0;
     @Column(name = "refunded_at")
     private LocalDateTime refundedAt;
 }

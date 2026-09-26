@@ -12,6 +12,7 @@ import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.port.persistence.PayoutRepository;
 import iuh.fit.paymentservice.application.port.persistence.RefundRepository;
 import iuh.fit.paymentservice.application.port.security.BankAccountProtector;
+import iuh.fit.paymentservice.application.service.OwnerPayoutService;
 import iuh.fit.paymentservice.application.service.PaymentDomainEventService;
 import iuh.fit.paymentservice.application.service.RefundDisbursementService;
 import iuh.fit.paymentservice.domain.entity.BankAccount;
@@ -49,6 +50,7 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
     private final BankAccountProtector bankAccountProtector;
     private final PayoutProviderPort payoutProviderPort;
     private final PaymentDomainEventService paymentDomainEventService;
+    private final OwnerPayoutService ownerPayoutService;
 
     @Override
     @Transactional
@@ -94,6 +96,50 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
         }
     }
 
+    /** Tối đa 6 lần tự chi lại, giãn cách 5, 10, 20, 40, 80, 160 phút; sau đó người chơi vẫn bấm "Thử lại" được. */
+    static final int MAX_AUTO_RETRIES = 6;
+    private static final long BASE_RETRY_MINUTES = 5;
+    private static final EnumSet<RefundStatus> RETRYABLE = EnumSet.of(RefundStatus.FAILED, RefundStatus.AWAITING_BANK_ACCOUNT);
+
+    @Override
+    public List<UUID> findRetryableRefundIds(LocalDateTime now) {
+        return refundRepository.findReconciliationCandidates(RETRYABLE, now.minusMinutes(BASE_RETRY_MINUTES), 50).stream()
+                .filter(refund -> retries(refund) < MAX_AUTO_RETRIES)
+                .filter(refund -> refund.getUpdatedAt() == null
+                        || !refund.getUpdatedAt().isAfter(now.minusMinutes(BASE_RETRY_MINUTES << retries(refund))))
+                .map(Refund::getRefundId)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public boolean recordRetryAttempt(UUID refundId) {
+        Refund refund = lockedRefund(refundId);
+        if (!RETRYABLE.contains(refund.getStatus()) || retries(refund) >= MAX_AUTO_RETRIES) return false;
+        Payment payment = paymentRepository.findById(refund.getPaymentId()).orElse(null);
+        // Chưa có tài khoản dùng được thì chưa tính lượt: liên kết xong BankAccountService tự chi.
+        if (payment == null || bankAccountRepository.findDefaultByPayeeIdAndStatuses(payment.getPayerId(), USABLE_ACCOUNTS).isEmpty()) {
+            return false;
+        }
+        refund.setRetryCount(retries(refund) + 1);
+        refundRepository.save(refund);
+        return true;
+    }
+
+    @Override
+    @Transactional
+    public void retry(UUID refundId) {
+        Refund refund = lockedRefund(refundId);
+        if (!RETRYABLE.contains(refund.getStatus())) return;
+        Payment payment = paymentRepository.findByIdForUpdate(refund.getPaymentId())
+                .orElseThrow(() -> new PaymentNotFoundException(refund.getPaymentId()));
+        disburse(refund, payment);
+    }
+
+    private static int retries(Refund refund) {
+        return refund.getRetryCount() == null ? 0 : refund.getRetryCount();
+    }
+
     @Override
     @Scheduled(fixedDelayString = "${payment.payout.reconciliation-delay-ms:30000}")
     @Transactional
@@ -107,6 +153,10 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
         Payout payout = payoutRepository.findByIdForUpdate(candidate.getPayoutId()).orElse(null);
         if (payout == null || payout.getStatus() != PayoutStatus.PROCESSING) return;
         ProviderPayoutResult result = payoutProviderPort.get(payout.getProviderPayoutId());
+        if (payout.getRefundId() == null) {
+            ownerPayoutService.applyProviderResult(payout, result);
+            return;
+        }
         applyProviderResult(payout, result);
     }
 

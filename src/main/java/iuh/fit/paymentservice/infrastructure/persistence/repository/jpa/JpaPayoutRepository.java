@@ -15,6 +15,8 @@ import java.util.UUID;
 public interface JpaPayoutRepository extends JpaRepository<PayoutEntity, UUID> {
     Optional<PayoutEntity> findByRefundId(UUID refundId);
 
+    Optional<PayoutEntity> findBySettlementId(UUID settlementId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select payout from PayoutEntity payout where payout.payoutId = :payoutId")
     Optional<PayoutEntity> findByIdForUpdate(UUID payoutId);

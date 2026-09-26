@@ -23,6 +23,11 @@ public class RefundRepositoryImpl implements RefundRepository {
     private final RefundEntityMapper refundEntityMapper;
 
     @Override
+    public double sumByPayeeId(UUID payeeId) {
+        return jpaRefundRepository.sumByPayeeId(payeeId);
+    }
+
+    @Override
     public Refund save(Refund refund) {
         RefundEntity refundEntity = refund.getRefundId() == null
                 ? refundEntityMapper.toEntity(refund)

@@ -28,6 +28,12 @@ public class PaymentRepositoryImpl implements PaymentRepository {
     }
 
     @Override
+    public double sumPayeeAmount(UUID payeeId, java.util.Collection<iuh.fit.paymentservice.domain.enums.PaymentStatus> statuses,
+                                 java.time.LocalDateTime paidBefore) {
+        return jpaPaymentRepository.sumPayeeAmount(payeeId, statuses, paidBefore);
+    }
+
+    @Override
     public Optional<Payment> findById(UUID paymentId) {
         return jpaPaymentRepository.findById(paymentId).map(paymentEntityMapper::toDomain);
     }

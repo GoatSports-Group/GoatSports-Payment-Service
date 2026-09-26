@@ -27,4 +27,7 @@ public class Refund extends BaseEntity {
     private RefundStatus status;
     private String failureReason;
     private LocalDateTime refundedAt;
+    /** Số lần hệ thống tự chi lại khi lần trước lỗi. */
+    @lombok.Builder.Default
+    private Integer retryCount = 0;
 }

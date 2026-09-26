@@ -39,6 +39,11 @@ public class PayoutRepositoryImpl implements PayoutRepository {
     }
 
     @Override
+    public Optional<Payout> findBySettlementId(UUID settlementId) {
+        return jpaRepository.findBySettlementId(settlementId).map(mapper::toDomain);
+    }
+
+    @Override
     public Optional<Payout> findByIdForUpdate(UUID payoutId) {
         return jpaRepository.findByIdForUpdate(payoutId).map(mapper::toDomain);
     }

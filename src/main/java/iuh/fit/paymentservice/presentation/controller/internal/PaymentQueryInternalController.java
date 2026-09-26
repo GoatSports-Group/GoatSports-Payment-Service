@@ -20,6 +20,7 @@ import java.util.List;
 public class PaymentQueryInternalController {
     private final PaymentService paymentService;
     private final PaymentConverter paymentConverter;
+    private final iuh.fit.paymentservice.application.service.OwnerPayoutService ownerPayoutService;
 
     @PostMapping("/query")
     public ResponseEntity<List<PaymentResponse>> queryByReferences(
@@ -31,5 +32,16 @@ public class PaymentQueryInternalController {
                 .map(paymentConverter::toResponse)
                 .toList();
         return ResponseEntity.ok(response);
+    }
+
+    /** venue/club báo khoản thu đã được nhận cho booking/đăng ký nào thì thuộc về chủ sân/người tổ chức nào. */
+    @PostMapping("/{paymentId}/payee")
+    public ResponseEntity<Void> assignPayee(@org.springframework.web.bind.annotation.PathVariable java.util.UUID paymentId,
+                                            @Valid @RequestBody AssignPayeeRequest request) {
+        ownerPayoutService.assignPayee(paymentId, request.payeeId());
+        return ResponseEntity.noContent().build();
+    }
+
+    public record AssignPayeeRequest(@jakarta.validation.constraints.NotNull java.util.UUID payeeId) {
     }
 }

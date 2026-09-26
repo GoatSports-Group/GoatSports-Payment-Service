@@ -23,6 +23,11 @@ public interface JpaPaymentRepository extends JpaRepository<PaymentEntity, UUID>
 
     Optional<PaymentEntity> findByIdempotencyKey(String idempotencyKey);
 
+    @Query("select coalesce(sum(payment.payeeAmount), 0) from PaymentEntity payment where payment.payeeId = :payeeId "
+            + "and payment.status in :statuses and payment.paidAt <= :paidBefore")
+    Double sumPayeeAmount(UUID payeeId, java.util.Collection<iuh.fit.paymentservice.domain.enums.PaymentStatus> statuses,
+                          java.time.LocalDateTime paidBefore);
+
     Optional<PaymentEntity> findByReferenceTypeAndReferenceIdAndPurpose(
             PaymentReferenceType referenceType,
             UUID referenceId,

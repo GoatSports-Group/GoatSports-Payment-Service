@@ -12,6 +12,10 @@ import java.util.UUID;
 public interface PaymentRepository {
     Payment save(Payment payment);
 
+    /** Tổng phần chủ nhận được hưởng của các khoản đã thu, trả trước {@code paidBefore}. */
+    double sumPayeeAmount(UUID payeeId, java.util.Collection<iuh.fit.paymentservice.domain.enums.PaymentStatus> statuses,
+                          java.time.LocalDateTime paidBefore);
+
     Optional<Payment> findById(UUID paymentId);
 
     Optional<Payment> findByIdForUpdate(UUID paymentId);

@@ -15,4 +15,5 @@
     <include file="/db/changelog/schema/09-09-2026/add-refund-disbursement-workflow.xml"/>
     <include file="/db/changelog/schema/10-09-2026/repair-failed-bank-account-verification.xml"/>
     <include file="/db/changelog/schema/26-09-2026/add-payment-event-outbox.xml"/>
+    <include file="/db/changelog/schema/27-09-2026/add-refund-retry-count.xml"/>
 </databaseChangeLog>

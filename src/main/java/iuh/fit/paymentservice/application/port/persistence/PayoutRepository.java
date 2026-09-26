@@ -13,6 +13,8 @@ public interface PayoutRepository {
 
     Optional<Payout> findByRefundId(UUID refundId);
 
+    Optional<Payout> findBySettlementId(UUID settlementId);
+
     Optional<Payout> findByIdForUpdate(UUID payoutId);
 
     List<Payout> findByStatuses(Collection<PayoutStatus> statuses);

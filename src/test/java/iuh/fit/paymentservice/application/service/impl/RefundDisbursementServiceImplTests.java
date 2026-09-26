@@ -52,8 +52,27 @@ class RefundDisbursementServiceImplTests {
     private PayoutProviderPort payoutProviderPort;
     @Mock
     private PaymentDomainEventService paymentDomainEventService;
+    @Mock
+    private iuh.fit.paymentservice.application.service.OwnerPayoutService ownerPayoutService;
     @InjectMocks
     private RefundDisbursementServiceImpl service;
+
+    @Test
+    void autoRetryWaitsLongerAfterEachAttemptAndStopsAtTheCap() {
+        java.time.LocalDateTime now = java.time.LocalDateTime.of(2026, 9, 27, 12, 0);
+        Refund fresh = Refund.builder().refundId(UUID.randomUUID()).status(RefundStatus.FAILED)
+                .retryCount(0).updatedAt(now.minusMinutes(6)).build();
+        Refund tooSoon = Refund.builder().refundId(UUID.randomUUID()).status(RefundStatus.FAILED)
+                .retryCount(2).updatedAt(now.minusMinutes(15)).build();          // cần đợi 20 phút
+        Refund due = Refund.builder().refundId(UUID.randomUUID()).status(RefundStatus.AWAITING_BANK_ACCOUNT)
+                .retryCount(2).updatedAt(now.minusMinutes(25)).build();
+        Refund exhausted = Refund.builder().refundId(UUID.randomUUID()).status(RefundStatus.FAILED)
+                .retryCount(RefundDisbursementServiceImpl.MAX_AUTO_RETRIES).updatedAt(now.minusDays(2)).build();
+        when(refundRepository.findReconciliationCandidates(anyCollection(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(List.of(fresh, tooSoon, due, exhausted));
+
+        assertThat(service.findRetryableRefundIds(now)).containsExactly(fresh.getRefundId(), due.getRefundId());
+    }
 
     @Test
     void reportsProviderFailureInsteadOfClaimingBankAccountIsMissing() {

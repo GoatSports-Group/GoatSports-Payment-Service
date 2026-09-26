@@ -17,6 +17,10 @@ import java.util.UUID;
 
 @Repository
 public interface JpaRefundRepository extends JpaRepository<RefundEntity, UUID> {
+    @Query("select coalesce(sum(refund.amount), 0) from RefundEntity refund, PaymentEntity payment "
+            + "where refund.paymentId = payment.paymentId and payment.payeeId = :payeeId")
+    Double sumByPayeeId(UUID payeeId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select refund from RefundEntity refund where refund.refundId = :refundId")
     Optional<RefundEntity> findByIdForUpdate(UUID refundId);

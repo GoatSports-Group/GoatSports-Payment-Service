@@ -25,6 +25,9 @@ public interface RefundRepository {
     /** Mọi khoản hoàn của các payment do người này trả, mới nhất trước. */
     List<Refund> findByPayerId(UUID payerId);
 
+    /** Tổng mọi khoản hoàn (đã hoặc sẽ chi) trên các khoản thu của một chủ nhận: tiền đó không thuộc về họ. */
+    double sumByPayeeId(UUID payeeId);
+
     List<Refund> findReconciliationCandidates(
             Collection<RefundStatus> statuses,
             LocalDateTime updatedBefore,
