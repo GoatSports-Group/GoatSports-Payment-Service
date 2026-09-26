@@ -15,6 +15,7 @@ import iuh.fit.paymentservice.application.service.TournamentFeeCheckoutService;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.enums.PaymentMethod;
 import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
+import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -56,6 +57,11 @@ public class TournamentFeeCheckoutServiceImpl implements TournamentFeeCheckoutSe
                     || Math.abs(existing.getAmount() - command.amount()) >= 0.01) {
                 throw new PaymentConflictException("TOURNAMENT_FEE_MISMATCH",
                         "Khoản lệ phí hiện có không khớp người đăng ký hoặc mức phí của giải");
+            }
+            // Đã trả rồi (club-service có thể lỡ sự kiện): báo trạng thái để bên gọi tự xác nhận đăng ký.
+            if (existing.getStatus() == PaymentStatus.SUCCEEDED) {
+                return new BookingCheckoutResult(existing.getPaymentId(), existing.getStatus().name(),
+                        null, null, null, existing.getExpiresAt());
             }
             payment = retryService.prepare(existing.getPaymentId(), command.expiresAt());
         }
