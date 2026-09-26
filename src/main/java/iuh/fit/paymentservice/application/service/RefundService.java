@@ -7,10 +7,15 @@ import iuh.fit.paymentservice.application.dto.response.refund.RefundResponseComm
 
 import java.util.UUID;
 
+import iuh.fit.paymentservice.application.dto.response.refund.MyRefundView;
+import java.util.List;
+
 public interface RefundService {
     CreateRefundResult createRefund(CreateRefundCommand command);
 
     RefundResponseCommand completeManualRefund(CompleteManualRefundCommand command);
 
     RefundResponseCommand claim(UUID refundId, UUID payerId);
+
+    List<MyRefundView> getMyRefunds(UUID payerId);
 }

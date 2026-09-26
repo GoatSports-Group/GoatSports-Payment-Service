@@ -22,6 +22,9 @@ public interface RefundRepository {
 
     List<Refund> findAutomaticByPayerIdAndStatus(UUID payerId, RefundStatus status);
 
+    /** Mọi khoản hoàn của các payment do người này trả, mới nhất trước. */
+    List<Refund> findByPayerId(UUID payerId);
+
     List<Refund> findReconciliationCandidates(
             Collection<RefundStatus> statuses,
             LocalDateTime updatedBefore,

@@ -33,6 +33,10 @@ public interface JpaRefundRepository extends JpaRepository<RefundEntity, UUID> {
             + "order by refund.createdAt asc")
     List<RefundEntity> findAutomaticByPayerIdAndStatus(UUID payerId, RefundStatus status);
 
+    @Query("select refund from RefundEntity refund join refund.payment payment "
+            + "where payment.payerId = :payerId order by refund.createdAt desc")
+    List<RefundEntity> findByPayerId(UUID payerId);
+
     List<RefundEntity> findByStatusInAndUpdatedAtBeforeOrderByUpdatedAtAsc(
             Collection<RefundStatus> statuses,
             LocalDateTime updatedBefore,

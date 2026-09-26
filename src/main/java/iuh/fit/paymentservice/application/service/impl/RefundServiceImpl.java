@@ -11,6 +11,12 @@ import iuh.fit.paymentservice.application.service.RefundDisbursementService;
 import iuh.fit.paymentservice.application.service.RefundService;
 import iuh.fit.paymentservice.application.service.RefundTransactionService;
 import iuh.fit.paymentservice.domain.entity.Refund;
+import iuh.fit.paymentservice.application.dto.response.refund.MyRefundView;
+import iuh.fit.paymentservice.application.port.persistence.RefundRepository;
+import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
+import iuh.fit.paymentservice.domain.entity.Payment;
+import iuh.fit.paymentservice.domain.enums.RefundStatus;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -23,6 +29,8 @@ public class RefundServiceImpl implements RefundService {
     private final RefundTransactionService refundTransactionService;
     private final RefundMapper refundMapper;
     private final RefundDisbursementService refundDisbursementService;
+    private final RefundRepository refundRepository;
+    private final PaymentRepository paymentRepository;
 
     @Override
     public CreateRefundResult createRefund(CreateRefundCommand command) {
@@ -56,5 +64,22 @@ public class RefundServiceImpl implements RefundService {
 
     private CreateRefundResult result(Refund refund, boolean replayed) {
         return new CreateRefundResult(refundMapper.toRefundResponseCommand(refund), replayed);
+    }
+
+    @Override
+    public List<MyRefundView> getMyRefunds(UUID payerId) {
+        return refundRepository.findByPayerId(payerId).stream().map(refund -> {
+            Payment payment = paymentRepository.findById(refund.getPaymentId()).orElse(null);
+            boolean claimable = refund.getStatus() == RefundStatus.AWAITING_CLAIM
+                    || refund.getStatus() == RefundStatus.AWAITING_BANK_ACCOUNT
+                    || refund.getStatus() == RefundStatus.FAILED;
+            return new MyRefundView(refund.getRefundId(), refund.getPaymentId(), refund.getAmount(), refund.getStatus(),
+                    refund.getReason(), refund.getFailureReason(), refund.getRefundedAt(), refund.getCreatedAt(),
+                    payment == null ? null : payment.getPurpose(),
+                    payment == null ? null : payment.getReferenceType(),
+                    payment == null ? null : payment.getReferenceId(),
+                    payment == null ? null : payment.getDescription(),
+                    claimable);
+        }).toList();
     }
 }

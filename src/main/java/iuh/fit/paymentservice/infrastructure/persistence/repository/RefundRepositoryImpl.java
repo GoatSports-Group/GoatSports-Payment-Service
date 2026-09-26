@@ -71,6 +71,11 @@ public class RefundRepositoryImpl implements RefundRepository {
     }
 
     @Override
+    public List<Refund> findByPayerId(UUID payerId) {
+        return jpaRefundRepository.findByPayerId(payerId).stream().map(refundEntityMapper::toDomain).toList();
+    }
+
+    @Override
     public List<Refund> findReconciliationCandidates(
             Collection<RefundStatus> statuses,
             LocalDateTime updatedBefore,
