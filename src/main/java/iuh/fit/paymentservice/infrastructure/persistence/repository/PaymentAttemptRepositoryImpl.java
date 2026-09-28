@@ -5,6 +5,7 @@ import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
 import iuh.fit.paymentservice.domain.enums.PaymentMethod;
 import iuh.fit.paymentservice.domain.enums.PaymentProvider;
+import iuh.fit.paymentservice.infrastructure.persistence.entity.PaymentAttemptEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.mapper.PaymentAttemptEntityMapper;
 import iuh.fit.paymentservice.infrastructure.persistence.repository.jpa.JpaPaymentAttemptRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,9 +26,17 @@ public class PaymentAttemptRepositoryImpl implements PaymentAttemptRepository {
 
     @Override
     public PaymentAttempt save(PaymentAttempt paymentAttempt) {
-        return paymentAttemptEntityMapper.toDomain(
-                jpaPaymentAttemptRepository.saveAndFlush(paymentAttemptEntityMapper.toEntity(paymentAttempt))
-        );
+        // Có id thì chép lên entity đang quản lý: merge một entity mới (payment = null) khiến Hibernate cảnh báo
+        // HHH000502 vì quan hệ payment là chỉ-đọc.
+        PaymentAttemptEntity entity = paymentAttempt.getAttemptId() == null
+                ? paymentAttemptEntityMapper.toEntity(paymentAttempt)
+                : jpaPaymentAttemptRepository.findById(paymentAttempt.getAttemptId())
+                        .map(existing -> {
+                            paymentAttemptEntityMapper.updateEntity(paymentAttempt, existing);
+                            return existing;
+                        })
+                        .orElseGet(() -> paymentAttemptEntityMapper.toEntity(paymentAttempt));
+        return paymentAttemptEntityMapper.toDomain(jpaPaymentAttemptRepository.saveAndFlush(entity));
     }
 
     @Override

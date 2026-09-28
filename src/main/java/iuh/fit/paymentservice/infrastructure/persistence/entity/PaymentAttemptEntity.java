@@ -37,7 +37,6 @@ public class PaymentAttemptEntity extends BaseEntity {
     private UUID attemptId;
     @Column(name = "payment_id", nullable = false)
     private UUID paymentId;
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "payment_id", nullable = false, insertable = false, updatable = false)
     private PaymentEntity payment;
