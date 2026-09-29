@@ -156,6 +156,16 @@ public class OwnerPayoutServiceImpl implements OwnerPayoutService {
             settlement.setSettledAt(LocalDateTime.now());
         } else if (result.status() == PayoutStatus.FAILED || result.status() == PayoutStatus.CANCELLED) {
             settlement.setStatus(SettlementStatus.FAILED);
+            if (PayoutFailureMessages.classify(result.failureCode(), result.failureReason())
+                    == PayoutFailureMessages.Kind.DESTINATION) {
+                // Tài khoản nhận không tồn tại: không để lần rút sau lại chọn nó làm mặc định.
+                bankAccountRepository.findByIdForUpdate(payout.getBankAccountId()).ifPresent(account -> {
+                    account.setStatus(BankAccountStatus.REJECTED);
+                    account.setIsDefault(false);
+                    account.setVerifiedAt(null);
+                    bankAccountRepository.save(account);
+                });
+            }
         } else {
             // PENDING/PROCESSING/MANUAL_REVIEW: tiền vẫn coi như đã rút cho tới khi payOS trả kết quả cuối.
             settlement.setStatus(SettlementStatus.PROCESSING);
@@ -163,12 +173,23 @@ public class OwnerPayoutServiceImpl implements OwnerPayoutService {
         settlementRepository.save(settlement);
     }
 
+    /** Lý do đọc được cho chủ sân; lý do thô của payOS vẫn ở payout để đối soát. */
+    private String failureMessage(Settlement settlement, Payout payout) {
+        if (payout == null || (payout.getFailureReason() == null && payout.getFailureCode() == null)) return null;
+        String masked = payout.getDestinationAccountMasked();
+        boolean verified = bankAccountRepository.findByPayeeId(settlement.getPayeeId()).stream()
+                .anyMatch(account -> account.getBankAccountId().equals(payout.getBankAccountId())
+                        && account.getStatus() == BankAccountStatus.VERIFIED);
+        return PayoutFailureMessages.userMessage(payout.getFailureCode(), payout.getFailureReason(),
+                masked == null ? null : masked.replace("*", ""), verified);
+    }
+
     private Withdrawal view(Settlement settlement) {
         Payout payout = payoutRepository.findBySettlementId(settlement.getSettlementId()).orElse(null);
         return new Withdrawal(settlement.getSettlementId(), settlement.getPayoutAmount(), settlement.getStatus(),
                 payout == null ? null : payout.getDestinationAccountMasked(),
                 payout == null ? null : payout.getDestinationAccountName(),
-                payout == null ? null : payout.getFailureReason(),
+                failureMessage(settlement, payout),
                 settlement.getCreatedAt(), settlement.getSettledAt());
     }
 }

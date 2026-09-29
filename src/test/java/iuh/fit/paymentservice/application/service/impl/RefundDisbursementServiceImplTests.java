@@ -123,7 +123,9 @@ class RefundDisbursementServiceImplTests {
         Refund result = service.claim(refundId, payerId);
 
         assertThat(result.getStatus()).isEqualTo(RefundStatus.FAILED);
-        assertThat(result.getFailureReason()).isEqualTo("Địa chỉ IP không được phép truy cập hệ thống");
+        // Lỗi phía GoatSports (IP bị chặn): không đổ lỗi cho tài khoản của người nhận.
+        assertThat(result.getFailureReason()).contains("Lỗi ở phía hệ thống");
+        assertThat(account.getStatus()).isEqualTo(BankAccountStatus.PENDING_VERIFICATION);
         verify(paymentDomainEventService).recordRefundResult(eq(result), eq(PaymentStatus.SUCCEEDED), any());
     }
 
@@ -237,7 +239,7 @@ class RefundDisbursementServiceImplTests {
         assertThat(account.getStatus()).isEqualTo(BankAccountStatus.REJECTED);
         assertThat(account.getIsDefault()).isFalse();
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.AWAITING_BANK_ACCOUNT);
-        assertThat(refund.getFailureReason()).isEqualTo("Không tìm thấy tài khoản nhận chi");
+        assertThat(refund.getFailureReason()).startsWith("Số tài khoản ngân hàng không tồn tại");
         verify(bankAccountRepository).save(account);
         verify(paymentDomainEventService).recordRefundResult(eq(refund), eq(PaymentStatus.SUCCEEDED), any());
     }

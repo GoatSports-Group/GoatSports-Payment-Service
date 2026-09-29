@@ -25,6 +25,7 @@ import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import iuh.fit.paymentservice.domain.enums.PayoutStatus;
 import iuh.fit.paymentservice.domain.enums.RefundStatus;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +38,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RefundDisbursementServiceImpl implements RefundDisbursementService {
     private static final EnumSet<BankAccountStatus> USABLE_ACCOUNTS = EnumSet.of(
             BankAccountStatus.PENDING_VERIFICATION,
@@ -209,8 +211,18 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
             payout.setFailureCode(exception.getCode());
             payout.setFailureReason(exception.getMessage());
             payoutRepository.save(payout);
-            refund.setStatus(RefundStatus.FAILED);
-            refund.setFailureReason(exception.getMessage());
+            log.warn("Refund payout {} rejected by provider: code={}, reason={}",
+                    refund.getRefundId(), exception.getCode(), exception.getMessage());
+            // Người nhận thấy lý do đọc được (payOS có thể chỉ trả "Chi thất bại"); lý do thô ở payout để đối soát.
+            refund.setFailureReason(PayoutFailureMessages.userMessage(exception.getCode(), exception.getMessage(),
+                    account.getAccountNumberLast4(), account.getStatus() == BankAccountStatus.VERIFIED));
+            if (PayoutFailureMessages.classify(exception.getCode(), exception.getMessage())
+                    == PayoutFailureMessages.Kind.DESTINATION) {
+                rejectAccount(account);
+                refund.setStatus(RefundStatus.AWAITING_BANK_ACCOUNT);
+            } else {
+                refund.setStatus(RefundStatus.FAILED);
+            }
             Refund failed = refundRepository.save(refund);
             paymentDomainEventService.recordRefundResult(failed, payment.getStatus(), payment.getPayerId());
             return failed;
@@ -249,8 +261,9 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
         if (result.status() == PayoutStatus.SUCCEEDED) payout.setCompletedAt(LocalDateTime.now());
         payoutRepository.save(payout);
 
-        bankAccountRepository.findByIdForUpdate(payout.getBankAccountId())
-                .ifPresent(account -> updateVerifiedAccount(account, result));
+        BankAccount account = bankAccountRepository.findByIdForUpdate(payout.getBankAccountId()).orElse(null);
+        boolean verifiedBefore = account != null && account.getStatus() == BankAccountStatus.VERIFIED;
+        if (account != null) updateVerifiedAccount(account, result);
 
         Refund refund = lockedRefund(payout.getRefundId());
         Payment payment = paymentRepository.findByIdForUpdate(refund.getPaymentId())
@@ -261,9 +274,11 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
             refund.setRefundedAt(LocalDateTime.now());
             refund.setFailureReason(null);
         } else if (result.status() == PayoutStatus.FAILED || result.status() == PayoutStatus.CANCELLED) {
+            log.warn("Refund payout {} failed at provider: code={}, reason={}",
+                    refund.getRefundId(), result.failureCode(), result.failureReason());
             refund.setStatus(RefundStatus.AWAITING_BANK_ACCOUNT);
-            refund.setFailureReason(result.failureReason() == null
-                    ? "Tài khoản nhận tiền không hợp lệ, vui lòng liên kết lại" : result.failureReason());
+            refund.setFailureReason(PayoutFailureMessages.userMessage(result.failureCode(), result.failureReason(),
+                    account == null ? null : account.getAccountNumberLast4(), verifiedBefore));
         } else {
             refund.setStatus(RefundStatus.PROCESSING);
         }
@@ -275,10 +290,10 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
 
     private void updateVerifiedAccount(BankAccount account, ProviderPayoutResult result) {
         if ((result.status() == PayoutStatus.FAILED || result.status() == PayoutStatus.CANCELLED)
-                && isBankAccountVerificationFailure(result)) {
-            account.setStatus(BankAccountStatus.REJECTED);
-            account.setIsDefault(false);
-            account.setVerifiedAt(null);
+                && PayoutFailureMessages.classify(result.failureCode(), result.failureReason())
+                == PayoutFailureMessages.Kind.DESTINATION) {
+            rejectAccount(account);
+            return;
         } else if (result.status() == PayoutStatus.SUCCEEDED) {
             account.setStatus(BankAccountStatus.VERIFIED);
             account.setVerifiedAt(account.getVerifiedAt() == null ? LocalDateTime.now() : account.getVerifiedAt());
@@ -291,14 +306,12 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
         bankAccountRepository.save(account);
     }
 
-    private boolean isBankAccountVerificationFailure(ProviderPayoutResult result) {
-        String failure = ((result.failureCode() == null ? "" : result.failureCode()) + " "
-                + (result.failureReason() == null ? "" : result.failureReason())).toLowerCase();
-        return failure.contains("account_not_found")
-                || failure.contains("invalid_account")
-                || failure.contains("destination_account")
-                || failure.contains("tài khoản nhận")
-                || failure.contains("tai khoan nhan");
+    /** Tài khoản nhận không tồn tại: không dùng làm mặc định nữa, người nhận phải chọn hoặc liên kết lại. */
+    private void rejectAccount(BankAccount account) {
+        account.setStatus(BankAccountStatus.REJECTED);
+        account.setIsDefault(false);
+        account.setVerifiedAt(null);
+        bankAccountRepository.save(account);
     }
 
     private void updatePaymentRefundedAmount(Payment payment) {
