@@ -95,6 +95,18 @@ public class OwnerPayoutServiceImpl implements OwnerPayoutService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<Earning> getEarnings(UUID payeeId) {
+        LocalDateTime matureBefore = LocalDateTime.now().minusDays(holdDays);
+        return paymentRepository.findRecentByPayee(payeeId, COLLECTED).stream()
+                .map(payment -> new Earning(
+                        payment.getPaymentId(), payment.getPurpose(), payment.getReferenceType(), payment.getReferenceId(),
+                        payment.getPayeeAmount() == null ? 0 : payment.getPayeeAmount(), payment.getStatus(),
+                        payment.getPaidAt(), payment.getPaidAt() != null && payment.getPaidAt().isAfter(matureBefore)))
+                .toList();
+    }
+
+    @Override
     @Transactional
     public Withdrawal withdraw(UUID payeeId) {
         BankAccount account = bankAccountRepository.findDefaultByPayeeIdAndStatuses(payeeId, USABLE_ACCOUNTS)

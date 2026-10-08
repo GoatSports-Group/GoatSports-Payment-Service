@@ -28,6 +28,9 @@ public interface JpaPaymentRepository extends JpaRepository<PaymentEntity, UUID>
     Double sumPayeeAmount(UUID payeeId, java.util.Collection<iuh.fit.paymentservice.domain.enums.PaymentStatus> statuses,
                           java.time.LocalDateTime paidBefore);
 
+    List<PaymentEntity> findTop200ByPayeeIdAndStatusInOrderByPaidAtDesc(
+            UUID payeeId, java.util.Collection<iuh.fit.paymentservice.domain.enums.PaymentStatus> statuses);
+
     Optional<PaymentEntity> findByReferenceTypeAndReferenceIdAndPurpose(
             PaymentReferenceType referenceType,
             UUID referenceId,

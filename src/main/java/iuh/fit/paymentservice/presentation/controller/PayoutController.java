@@ -30,6 +30,11 @@ public class PayoutController {
         return ownerPayoutService.getWithdrawals(authenticatedUserId());
     }
 
+    @GetMapping("/me/earnings")
+    public List<OwnerPayoutService.Earning> earnings() {
+        return ownerPayoutService.getEarnings(authenticatedUserId());
+    }
+
     @PostMapping("/me/withdraw")
     public OwnerPayoutService.Withdrawal withdraw() {
         return ownerPayoutService.withdraw(authenticatedUserId());

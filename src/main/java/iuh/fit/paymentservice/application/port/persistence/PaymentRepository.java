@@ -16,6 +16,9 @@ public interface PaymentRepository {
     double sumPayeeAmount(UUID payeeId, java.util.Collection<iuh.fit.paymentservice.domain.enums.PaymentStatus> statuses,
                           java.time.LocalDateTime paidBefore);
 
+    List<Payment> findRecentByPayee(UUID payeeId,
+                                    java.util.Collection<iuh.fit.paymentservice.domain.enums.PaymentStatus> statuses);
+
     Optional<Payment> findById(UUID paymentId);
 
     Optional<Payment> findByIdForUpdate(UUID paymentId);

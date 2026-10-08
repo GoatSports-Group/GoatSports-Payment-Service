@@ -34,6 +34,14 @@ public class PaymentRepositoryImpl implements PaymentRepository {
     }
 
     @Override
+    public List<Payment> findRecentByPayee(UUID payeeId,
+                                           java.util.Collection<iuh.fit.paymentservice.domain.enums.PaymentStatus> statuses) {
+        return jpaPaymentRepository.findTop200ByPayeeIdAndStatusInOrderByPaidAtDesc(payeeId, statuses).stream()
+                .map(paymentEntityMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public Optional<Payment> findById(UUID paymentId) {
         return jpaPaymentRepository.findById(paymentId).map(paymentEntityMapper::toDomain);
     }

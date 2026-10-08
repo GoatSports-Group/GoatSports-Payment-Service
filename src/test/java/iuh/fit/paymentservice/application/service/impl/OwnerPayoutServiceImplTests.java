@@ -10,6 +10,7 @@ import iuh.fit.paymentservice.application.port.persistence.PayoutRepository;
 import iuh.fit.paymentservice.application.port.persistence.RefundRepository;
 import iuh.fit.paymentservice.application.port.persistence.SettlementRepository;
 import iuh.fit.paymentservice.application.port.security.BankAccountProtector;
+import iuh.fit.paymentservice.application.service.OwnerPayoutService;
 import iuh.fit.paymentservice.domain.entity.BankAccount;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
@@ -67,6 +68,23 @@ class OwnerPayoutServiceImplTests {
 
         assertThat(balance.onHold()).isEqualTo(200_000);
         assertThat(balance.available()).isEqualTo(150_000);
+    }
+
+    @Test
+    void earningsListPayeeShareAndFlagMoneyStillOnHold() {
+        Payment fresh = Payment.builder().paymentId(UUID.randomUUID()).payeeAmount(90_000.0)
+                .status(iuh.fit.paymentservice.domain.enums.PaymentStatus.SUCCEEDED)
+                .paidAt(LocalDateTime.now().minusDays(1)).build();
+        Payment matured = Payment.builder().paymentId(UUID.randomUUID()).payeeAmount(60_000.0)
+                .status(iuh.fit.paymentservice.domain.enums.PaymentStatus.PARTIALLY_REFUNDED)
+                .paidAt(LocalDateTime.now().minusDays(10)).build();
+        when(paymentRepository.findRecentByPayee(eq(owner), anyCollection())).thenReturn(java.util.List.of(fresh, matured));
+
+        var earnings = service.getEarnings(owner);
+
+        // Moc giu tien mac dinh 3 ngay giong getBalance(): khoan 1 ngay truoc con dang giu, khoan 10 ngay truoc da rut duoc.
+        assertThat(earnings).extracting(OwnerPayoutService.Earning::amount).containsExactly(90_000.0, 60_000.0);
+        assertThat(earnings).extracting(OwnerPayoutService.Earning::onHold).containsExactly(true, false);
     }
 
     @Test
