@@ -3,11 +3,9 @@ package iuh.fit.paymentservice;
 import iuh.fit.paymentservice.domain.entity.BankAccount;
 import iuh.fit.paymentservice.domain.entity.Payout;
 import iuh.fit.paymentservice.domain.entity.Settlement;
-import iuh.fit.paymentservice.domain.entity.SettlementItem;
 import iuh.fit.paymentservice.domain.enums.BankAccountStatus;
 import iuh.fit.paymentservice.domain.enums.PaymentProvider;
 import iuh.fit.paymentservice.domain.enums.PayoutStatus;
-import iuh.fit.paymentservice.domain.enums.SettlementItemType;
 import iuh.fit.paymentservice.domain.enums.SettlementStatus;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.BankAccountEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.PaymentAttemptEntity;
@@ -16,7 +14,6 @@ import iuh.fit.paymentservice.infrastructure.persistence.entity.PayoutEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.ProviderWebhookEventEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.RefundEntity;
 import iuh.fit.paymentservice.infrastructure.persistence.entity.SettlementEntity;
-import iuh.fit.paymentservice.infrastructure.persistence.entity.SettlementItemEntity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
@@ -60,14 +57,6 @@ class PaymentSettlementModelTests {
                 Map.entry("status", SettlementStatus.class),
                 Map.entry("settledAt", LocalDateTime.class)
         ));
-        assertThat(declaredFields(SettlementItem.class)).containsExactlyInAnyOrderEntriesOf(Map.of(
-                "settlementItemId", UUID.class,
-                "settlementId", UUID.class,
-                "paymentId", UUID.class,
-                "refundId", UUID.class,
-                "type", SettlementItemType.class,
-                "amount", Double.class
-        ));
         assertThat(declaredFields(Payout.class)).containsExactlyInAnyOrderEntriesOf(Map.ofEntries(
                 Map.entry("payoutId", UUID.class),
                 Map.entry("settlementId", UUID.class),
@@ -94,9 +83,6 @@ class PaymentSettlementModelTests {
         assertManyToOne(PaymentAttemptEntity.class, "payment", "payment_id", false);
         assertManyToOne(RefundEntity.class, "payment", "payment_id", false);
         assertManyToOne(ProviderWebhookEventEntity.class, "attempt", "attempt_id", true);
-        assertManyToOne(SettlementItemEntity.class, "settlement", "settlement_id", false);
-        assertManyToOne(SettlementItemEntity.class, "payment", "payment_id", false);
-        assertOneToOne(SettlementItemEntity.class, "refund", "refund_id", true);
         assertOneToOne(PayoutEntity.class, "settlement", "settlement_id", true);
         assertOneToOne(PayoutEntity.class, "refund", "refund_id", true);
         assertManyToOne(PayoutEntity.class, "bankAccount", "bank_account_id", false);
@@ -114,9 +100,6 @@ class PaymentSettlementModelTests {
         );
         assertThat(enumNames(SettlementStatus.values())).containsExactly(
                 "PENDING", "HELD", "READY", "PROCESSING", "PAID", "FAILED", "CANCELLED"
-        );
-        assertThat(enumNames(SettlementItemType.values())).containsExactly(
-                "PAYMENT_CREDIT", "PLATFORM_FEE", "REFUND_DEBIT"
         );
         assertThat(enumNames(PayoutStatus.values())).containsExactly(
                 "PENDING", "PROCESSING", "SUCCEEDED", "FAILED", "CANCELLED", "MANUAL_REVIEW"

@@ -108,17 +108,27 @@ public class OwnerPayoutServiceImpl implements OwnerPayoutService {
 
     @Override
     @Transactional
-    public Withdrawal withdraw(UUID payeeId) {
+    public Withdrawal withdraw(UUID payeeId, Double requestedAmount) {
         BankAccount account = bankAccountRepository.findDefaultByPayeeIdAndStatuses(payeeId, USABLE_ACCOUNTS)
                 .orElseThrow(() -> new PaymentConflictException("BANK_ACCOUNT_REQUIRED",
                         "Vui lòng liên kết tài khoản ngân hàng để rút tiền"));
         // ponytail: khóa theo tài khoản mặc định để hai lần bấm "Rút" không cùng đọc một số dư. Đổi tài khoản
         // mặc định đúng lúc đang rút thì hai khóa khác nhau — chuyển sang khóa theo payee nếu việc đó xảy ra thật.
         bankAccountRepository.findByIdForUpdate(account.getBankAccountId());
-        double amount = getBalance(payeeId).available();
-        if (amount < MINIMUM_WITHDRAWAL) {
+        double available = getBalance(payeeId).available();
+        if (available < MINIMUM_WITHDRAWAL) {
             throw new PaymentConflictException("BALANCE_TOO_LOW",
                     "Số dư khả dụng cần tối thiểu 10.000 đ để rút");
+        }
+        double amount = requestedAmount == null ? available : requestedAmount;
+        if (amount != Math.floor(amount) || amount < MINIMUM_WITHDRAWAL) {
+            throw new PaymentConflictException("WITHDRAWAL_AMOUNT_INVALID",
+                    "Số tiền rút phải là số nguyên, tối thiểu 10.000 đ");
+        }
+        // Kiểm lại ở server (sau khi đã khóa) dù giao diện đã chặn: số dư có thể đổi giữa lúc nhập và lúc bấm.
+        if (amount > available) {
+            throw new PaymentConflictException("WITHDRAWAL_EXCEEDS_BALANCE",
+                    "Số tiền rút lớn hơn số dư có thể rút");
         }
 
         LocalDateTime now = LocalDateTime.now();

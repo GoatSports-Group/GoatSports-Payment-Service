@@ -25,8 +25,11 @@ public interface OwnerPayoutService {
 
     List<Earning> getEarnings(UUID payeeId);
 
-    /** Rút toàn bộ số dư khả dụng về tài khoản ngân hàng mặc định. */
-    Withdrawal withdraw(UUID payeeId);
+    /**
+     * Rút {@code amount} (đồng, số nguyên) về tài khoản ngân hàng mặc định; {@code null} = rút toàn bộ số dư khả dụng.
+     * Số tiền phải từ mức tối thiểu đến số dư khả dụng.
+     */
+    Withdrawal withdraw(UUID payeeId, Double amount);
 
     /** Cập nhật lần rút theo kết quả payOS (gọi từ đối soát payout định kỳ). */
     void applyProviderResult(Payout payout, ProviderPayoutResult result);

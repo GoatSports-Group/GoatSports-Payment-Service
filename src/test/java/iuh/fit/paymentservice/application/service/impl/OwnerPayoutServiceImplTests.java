@@ -115,7 +115,7 @@ class OwnerPayoutServiceImplTests {
         when(payoutProviderPort.create(any())).thenReturn(
                 new ProviderPayoutResult("po-1", "CHU SAN", PayoutStatus.SUCCEEDED, null, null));
 
-        var withdrawal = service.withdraw(owner);
+        var withdrawal = service.withdraw(owner, null);
 
         assertThat(withdrawal.amount()).isEqualTo(300_000);
         assertThat(withdrawal.status()).isEqualTo(SettlementStatus.PAID);
@@ -128,7 +128,7 @@ class OwnerPayoutServiceImplTests {
         when(bankAccountRepository.findDefaultByPayeeIdAndStatuses(eq(owner), anyCollection()))
                 .thenReturn(Optional.of(BankAccount.builder().bankAccountId(UUID.randomUUID()).build()));
 
-        assertThatThrownBy(() -> service.withdraw(owner)).isInstanceOf(PaymentConflictException.class);
+        assertThatThrownBy(() -> service.withdraw(owner, null)).isInstanceOf(PaymentConflictException.class);
         verify(payoutProviderPort, never()).create(any());
     }
 
@@ -154,5 +154,20 @@ class OwnerPayoutServiceImplTests {
                 new ProviderPayoutResult("po-1", null, PayoutStatus.FAILED, "X", "Sai tài khoản"));
 
         assertThat(settlement.getStatus()).isEqualTo(SettlementStatus.FAILED);
+    }
+
+    @Test
+    void withdrawRefusesAmountAboveAvailableOrBelowMinimumWithoutCallingPayOs() {
+        ledger(500_000, 300_000, 0, 0);
+        BankAccount account = BankAccount.builder().bankAccountId(UUID.randomUUID()).build();
+        when(bankAccountRepository.findDefaultByPayeeIdAndStatuses(eq(owner), anyCollection())).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.withdraw(owner, 300_001.0))
+                .isInstanceOf(PaymentConflictException.class).hasMessageContaining("lớn hơn số dư");
+        assertThatThrownBy(() -> service.withdraw(owner, 9_000.0))
+                .isInstanceOf(PaymentConflictException.class).hasMessageContaining("tối thiểu");
+        assertThatThrownBy(() -> service.withdraw(owner, 50_000.5))
+                .isInstanceOf(PaymentConflictException.class).hasMessageContaining("số nguyên");
+        verify(payoutProviderPort, never()).create(any());
     }
 }

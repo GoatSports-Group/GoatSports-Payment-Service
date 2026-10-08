@@ -69,7 +69,7 @@ class PaymentServiceApplicationTests {
                 Integer.class
         );
 
-        assertThat(changeCount).isEqualTo(17);
+        assertThat(changeCount).isEqualTo(18);
 
         List<String> paymentColumns = jdbcTemplate.queryForList(
                 "select column_name from information_schema.columns " +
@@ -131,9 +131,10 @@ class PaymentServiceApplicationTests {
         assertThat(settlementTables).contains(
                 "bank_accounts",
                 "settlements",
-                "settlement_items",
                 "payouts"
         );
+        // Bang dong chi tiet settlement da bo (so du tinh theo tong, xem drop-settlement-items.xml).
+        assertThat(settlementTables).doesNotContain("settlement_items");
 
         List<String> foreignKeys = jdbcTemplate.queryForList(
                 "select constraint_name from information_schema.table_constraints " +
@@ -144,9 +145,6 @@ class PaymentServiceApplicationTests {
                 "fk_payment_attempts_payment",
                 "fk_provider_webhook_events_attempt",
                 "fk_refunds_payment",
-                "fk_settlement_items_settlement",
-                "fk_settlement_items_payment",
-                "fk_settlement_items_refund",
                 "fk_payouts_settlement",
                 "fk_payouts_bank_account"
         );

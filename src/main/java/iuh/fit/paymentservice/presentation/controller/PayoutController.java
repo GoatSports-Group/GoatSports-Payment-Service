@@ -6,6 +6,7 @@ import iuh.fit.paymentservice.application.service.OwnerPayoutService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,9 +36,13 @@ public class PayoutController {
         return ownerPayoutService.getEarnings(authenticatedUserId());
     }
 
+    /** Body {@code {"amount": 50000}}; bỏ trống body hoặc amount để rút toàn bộ số dư khả dụng. */
     @PostMapping("/me/withdraw")
-    public OwnerPayoutService.Withdrawal withdraw() {
-        return ownerPayoutService.withdraw(authenticatedUserId());
+    public OwnerPayoutService.Withdrawal withdraw(@RequestBody(required = false) WithdrawRequest request) {
+        return ownerPayoutService.withdraw(authenticatedUserId(), request == null ? null : request.amount());
+    }
+
+    public record WithdrawRequest(Double amount) {
     }
 
     private UUID authenticatedUserId() {
