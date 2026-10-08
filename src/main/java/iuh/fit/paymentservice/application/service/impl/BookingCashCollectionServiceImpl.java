@@ -10,9 +10,11 @@ import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.mapper.PaymentMapper;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.service.BookingCashCollectionService;
+import iuh.fit.paymentservice.application.service.BookingRemainingPaymentRetryService;
 import iuh.fit.paymentservice.application.service.CashCollectionService;
 import iuh.fit.paymentservice.application.service.PaymentService;
 import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
+import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ public class BookingCashCollectionServiceImpl implements BookingCashCollectionSe
     private final CashCollectionService cashCollectionService;
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
+    private final BookingRemainingPaymentRetryService bookingRemainingPaymentRetryService;
 
     @Override
     public PaymentResponseCommand collect(CollectBookingCashCommand command) {
@@ -49,6 +52,11 @@ public class BookingCashCollectionServiceImpl implements BookingCashCollectionSe
         } else {
             ensureExistingMatches(existing, command);
             paymentId = existing.getPaymentId();
+            // Moi booking chi co mot payment "phan con lai": ma payOS truoc do da huy / het han thi mo lai payment
+            // (nhu luc tao lai ma payOS) roi moi thu tien mat, thay vi bao PAYMENT_NOT_COLLECTIBLE.
+            if (existing.getStatus() != PaymentStatus.SUCCEEDED) {
+                bookingRemainingPaymentRetryService.prepare(paymentId, null);
+            }
         }
 
         cashCollectionService.collect(CollectCashPaymentCommand.builder()

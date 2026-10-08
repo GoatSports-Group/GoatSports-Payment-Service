@@ -1,6 +1,7 @@
 package iuh.fit.paymentservice.application.service.impl;
 
 import iuh.fit.paymentservice.application.dto.request.payment.CollectBookingCashCommand;
+import iuh.fit.paymentservice.application.service.BookingRemainingPaymentRetryService;
 import iuh.fit.paymentservice.application.dto.request.payment.CollectCashPaymentCommand;
 import iuh.fit.paymentservice.application.dto.request.payment.CreatePaymentCommand;
 import iuh.fit.paymentservice.application.dto.response.attempt.CreatePaymentAttemptResult;
@@ -31,6 +32,7 @@ class BookingCashCollectionServiceImplTests {
     @Mock private CashCollectionService cashCollectionService;
     @Mock private PaymentRepository paymentRepository;
     @Mock private PaymentMapper paymentMapper;
+    @Mock private BookingRemainingPaymentRetryService retryService;
 
     @Test
     void createsIdempotentRemainingPaymentAndCollectsItForAuthenticatedOwner() {
@@ -51,7 +53,7 @@ class BookingCashCollectionServiceImplTests {
         when(paymentMapper.toPaymentResponseCommand(payment)).thenReturn(succeeded);
 
         var service = new BookingCashCollectionServiceImpl(
-                paymentService, cashCollectionService, paymentRepository, paymentMapper
+                paymentService, cashCollectionService, paymentRepository, paymentMapper, retryService
         );
         var result = service.collect(new CollectBookingCashCommand(
                 payerId, bookingId, 140_000.0, "VND", collectorId
@@ -64,5 +66,31 @@ class BookingCashCollectionServiceImplTests {
         ArgumentCaptor<CollectCashPaymentCommand> cash = ArgumentCaptor.forClass(CollectCashPaymentCommand.class);
         verify(cashCollectionService).collect(cash.capture());
         assertThat(cash.getValue().getCollectorId()).isEqualTo(collectorId);
+    }
+
+    @Test
+    void reopensCancelledPayosPaymentBeforeCollectingCash() {
+        UUID bookingId = UUID.randomUUID();
+        UUID payerId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        Payment cancelled = Payment.builder().paymentId(paymentId).payerId(payerId).amount(140_000.0)
+                .currency("VND").status(PaymentStatus.CANCELLED).build();
+        when(paymentRepository.findByReference(
+                iuh.fit.paymentservice.domain.enums.PaymentReferenceType.BOOKING, bookingId,
+                iuh.fit.paymentservice.domain.enums.PaymentPurpose.BOOKING_REMAINING
+        )).thenReturn(Optional.of(cancelled));
+        when(cashCollectionService.collect(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new CreatePaymentAttemptResult(null, false));
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(cancelled));
+        when(paymentMapper.toPaymentResponseCommand(cancelled)).thenReturn(PaymentResponseCommand.builder()
+                .paymentId(paymentId).status(PaymentStatus.SUCCEEDED).build());
+
+        new BookingCashCollectionServiceImpl(paymentService, cashCollectionService, paymentRepository, paymentMapper, retryService)
+                .collect(new CollectBookingCashCommand(payerId, bookingId, 140_000.0, "VND", UUID.randomUUID()));
+
+        // Ma payOS da huy: mo lai payment truoc (giong luc tao lai ma), roi moi ghi nhan tien mat.
+        var order = org.mockito.Mockito.inOrder(retryService, cashCollectionService);
+        order.verify(retryService).prepare(paymentId, null);
+        order.verify(cashCollectionService).collect(org.mockito.ArgumentMatchers.any());
     }
 }
