@@ -66,7 +66,7 @@ class AdminFinanceQueryTests {
         assertThat(summary.refundsNeedingAttention()).isEqualTo(2);
 
         FinancePage<RefundRow> attention = adminFinanceService.getRefunds(
-                new RefundFilter(AdminFinanceService.REFUNDS_NEEDING_ATTENTION, null, null, null), 0, 20);
+                new RefundFilter(AdminFinanceService.REFUNDS_NEEDING_ATTENTION, null, null, null), null, null, 0, 20);
         assertThat(attention.total()).isEqualTo(2);
         RefundRow failedRow = attention.items().stream().filter(row -> row.refundId().equals(failed)).findFirst().orElseThrow();
         assertThat(failedRow.payerId()).isEqualTo(payer);
@@ -79,7 +79,8 @@ class AdminFinanceQueryTests {
         assertThat(succeeded.total()).isEqualTo(2);
         assertThat(succeeded.items()).hasSize(1);
         assertThat(adminFinanceService.getPayouts(
-                new PayoutFilter(AdminFinanceService.PayoutKind.OWNER_WITHDRAWAL, null, null, null), 0, 20).total()).isZero();
+                new PayoutFilter(AdminFinanceService.PayoutKind.OWNER_WITHDRAWAL, null, null, null), null, null, 0, 20)
+                .total()).isZero();
     }
 
     @Test
@@ -100,6 +101,20 @@ class AdminFinanceQueryTests {
         assertThat(ids(new RefundFilter(null, "gsold100", null, 7))).containsExactly(old);
         assertThat(ids(new RefundFilter(null, "gsnew200", null, 7))).isEmpty();
         assertThat(adminFinanceService.getSummary(DAY, DAY).staleRefunds()).isEqualTo(staleBefore + 1);
+    }
+
+    @Test
+    void listsOnlyRefundsCreatedInTheChosenPeriodWhileTheWorkQueueCountsEveryDay() {
+        UUID paid = payment(UUID.randomUUID(), 100_000, 0, "SUCCEEDED", DAY.atTime(9, 0));
+        UUID inPeriod = refund(paid, 10_000, "FAILED", "Hủy sân", DAY.atTime(12, 0));
+        refund(paid, 10_000, "FAILED", "Hủy sân", DAY.minusDays(45).atTime(12, 0));
+
+        FinancePage<RefundRow> page = adminFinanceService.getRefunds(
+                new RefundFilter(AdminFinanceService.REFUNDS_NEEDING_ATTENTION, null, null, null), DAY.minusDays(29), DAY, 0, 20);
+
+        assertThat(page.items()).extracting(RefundRow::refundId).containsExactly(inPeriod);
+        // Khoản kẹt từ trước kỳ vẫn nằm trong hàng đợi "Cần xử lý" (không theo kỳ).
+        assertThat(adminFinanceService.getSummary(DAY.minusDays(29), DAY).refundsNeedingAttention()).isEqualTo(2);
     }
 
     @Test
@@ -148,7 +163,7 @@ class AdminFinanceQueryTests {
     }
 
     private List<UUID> ids(RefundFilter filter) {
-        return adminFinanceService.getRefunds(filter, 0, 50).items().stream().map(RefundRow::refundId).toList();
+        return adminFinanceService.getRefunds(filter, null, null, 0, 50).items().stream().map(RefundRow::refundId).toList();
     }
 
     private Integer outboxReminders(UUID refundId) {

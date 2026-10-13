@@ -48,11 +48,6 @@ public class AdminFinanceQueryAdapter implements AdminFinanceQueryPort {
     }
 
     @Override
-    public long countOwnerPayouts(Collection<PayoutStatus> statuses) {
-        return repository.countOwnerPayouts(statuses);
-    }
-
-    @Override
     public FinancePage<PaymentRow> findPayments(Collection<PaymentStatus> statuses, Collection<PaymentPurpose> purposes,
                                                 LocalDateTime from, LocalDateTime to, int page, int size) {
         return page(repository.findPayments(statuses, purposes, from, to, PageRequest.of(page, size)));

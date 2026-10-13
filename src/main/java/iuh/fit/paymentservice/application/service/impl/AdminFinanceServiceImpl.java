@@ -58,7 +58,6 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
                 query.sumRefunded(period.start(), period.endExclusive()),
                 query.sumPaidOutToOwners(period.start(), period.endExclusive()),
                 query.countRefunds(REFUNDS_NEEDING_ATTENTION),
-                query.countOwnerPayouts(PAYOUTS_NEEDING_ATTENTION),
                 query.countRefunds(Set.of(RefundStatus.FAILED)),
                 query.countRefundsCreatedBefore(REMINDABLE_REFUNDS, now().minusDays(STALE_AFTER_DAYS)));
     }
@@ -72,8 +71,11 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
     }
 
     @Override
-    public FinancePage<RefundRow> getRefunds(RefundFilter filter, int page, int size) {
-        return findRefunds(filter, BEGINNING, now().plusDays(1), Math.max(page, 0), pageSize(size));
+    public FinancePage<RefundRow> getRefunds(RefundFilter filter, LocalDate from, LocalDate to, int page, int size) {
+        Period period = optionalPeriod(from, to);
+        return period == null
+                ? findRefunds(filter, BEGINNING, now().plusDays(1), Math.max(page, 0), pageSize(size))
+                : findRefunds(filter, period.start(), period.endExclusive(), Math.max(page, 0), pageSize(size));
     }
 
     @Override
@@ -82,8 +84,11 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
     }
 
     @Override
-    public FinancePage<PayoutRow> getPayouts(PayoutFilter filter, int page, int size) {
-        return findPayouts(filter, BEGINNING, now().plusDays(1), Math.max(page, 0), pageSize(size));
+    public FinancePage<PayoutRow> getPayouts(PayoutFilter filter, LocalDate from, LocalDate to, int page, int size) {
+        Period period = optionalPeriod(from, to);
+        return period == null
+                ? findPayouts(filter, BEGINNING, now().plusDays(1), Math.max(page, 0), pageSize(size))
+                : findPayouts(filter, period.start(), period.endExclusive(), Math.max(page, 0), pageSize(size));
     }
 
     /** Mỗi khoản chạy trong giao dịch riêng của {@code retry}: một khoản lỗi không làm hỏng các khoản còn lại. */
@@ -185,6 +190,11 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
             throw new PaymentApplicationException("INVALID_PERIOD", "Kỳ thống kê tối đa " + MAX_PERIOD_DAYS + " ngày.");
         }
         return new Period(start, end);
+    }
+
+    /** Danh sách hoàn tiền / chi trả: không chọn kỳ thì mọi lúc; chọn thì cùng quy tắc với kỳ thống kê. */
+    private Period optionalPeriod(LocalDate from, LocalDate to) {
+        return from == null && to == null ? null : period(from, to);
     }
 
     private LocalDateTime now() {

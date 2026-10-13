@@ -27,8 +27,6 @@ public interface AdminFinanceQueryPort {
 
     long countRefunds(Collection<RefundStatus> statuses);
 
-    long countOwnerPayouts(Collection<PayoutStatus> statuses);
-
     /** Giao dịch tạo trong [from, to), mới nhất trước. */
     FinancePage<PaymentRow> findPayments(Collection<PaymentStatus> statuses, Collection<PaymentPurpose> purposes,
                                          LocalDateTime from, LocalDateTime to, int page, int size);

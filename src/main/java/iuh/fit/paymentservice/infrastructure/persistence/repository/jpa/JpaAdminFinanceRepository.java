@@ -67,9 +67,6 @@ public interface JpaAdminFinanceRepository extends Repository<PaymentEntity, UUI
     @Query("select count(r) from RefundEntity r where r.status in :statuses")
     long countRefunds(Collection<RefundStatus> statuses);
 
-    @Query("select count(po) from PayoutEntity po where po.settlementId is not null and po.status in :statuses")
-    long countOwnerPayouts(Collection<PayoutStatus> statuses);
-
     @Query(value = PAYMENT_ROW + "from PaymentEntity p where p.status in :statuses and p.purpose in :purposes "
             + "and p.createdAt >= :from and p.createdAt < :to order by p.createdAt desc, p.paymentId",
             countQuery = "select count(p) from PaymentEntity p where p.status in :statuses and p.purpose in :purposes "

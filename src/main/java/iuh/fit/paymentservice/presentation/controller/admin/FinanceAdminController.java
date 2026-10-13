@@ -71,10 +71,12 @@ public class FinanceAdminController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) List<UUID> people,
             @RequestParam(required = false) Integer olderThanDays,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return adminFinanceService.getRefunds(new RefundFilter(status, q, people, olderThanDays), page, size);
+        return adminFinanceService.getRefunds(new RefundFilter(status, q, people, olderThanDays), from, to, page, size);
     }
 
     @GetMapping("/refunds/{refundId}")
@@ -90,10 +92,12 @@ public class FinanceAdminController {
             @RequestParam(required = false) List<PayoutStatus> status,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) List<UUID> people,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return adminFinanceService.getPayouts(new PayoutFilter(kind, status, q, people), page, size);
+        return adminFinanceService.getPayouts(new PayoutFilter(kind, status, q, people), from, to, page, size);
     }
 
     /** Dự phòng sự cố phía nền tảng; từng khoản lỗi thì người chơi tự bấm "Thử lại". */

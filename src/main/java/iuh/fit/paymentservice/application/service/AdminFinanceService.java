@@ -21,7 +21,6 @@ import java.util.UUID;
 public interface AdminFinanceService {
     /** Khoản hoàn cần người xử lý: chi lỗi (hết lượt tự chi) hoặc thanh toán tiền mặt chờ chủ sân hoàn tay. */
     Set<RefundStatus> REFUNDS_NEEDING_ATTENTION = Set.of(RefundStatus.FAILED, RefundStatus.MANUAL_REVIEW);
-    Set<PayoutStatus> PAYOUTS_NEEDING_ATTENTION = Set.of(PayoutStatus.FAILED, PayoutStatus.CANCELLED);
     /** Khoản hoàn đang chờ một người (người chơi nhận / liên kết ngân hàng, chủ sân hoàn tay): nhắc được. */
     Set<RefundStatus> REMINDABLE_REFUNDS = Set.of(RefundStatus.AWAITING_CLAIM, RefundStatus.AWAITING_BANK_ACCOUNT,
             RefundStatus.FAILED, RefundStatus.MANUAL_REVIEW);
@@ -36,11 +35,13 @@ public interface AdminFinanceService {
     FinancePage<PaymentRow> getPayments(Collection<PaymentStatus> statuses, Collection<PaymentPurpose> purposes,
                                         LocalDate from, LocalDate to, int page, int size);
 
-    FinancePage<RefundRow> getRefunds(RefundFilter filter, int page, int size);
+    /** Khoản hoàn tạo trong kỳ [from, to] theo ngày; bỏ trống cả hai thì mọi lúc. */
+    FinancePage<RefundRow> getRefunds(RefundFilter filter, LocalDate from, LocalDate to, int page, int size);
 
     RefundDetail getRefund(UUID refundId);
 
-    FinancePage<PayoutRow> getPayouts(PayoutFilter filter, int page, int size);
+    /** Lượt chi yêu cầu trong kỳ [from, to] theo ngày; bỏ trống cả hai thì mọi lúc. */
+    FinancePage<PayoutRow> getPayouts(PayoutFilter filter, LocalDate from, LocalDate to, int page, int size);
 
     /**
      * Dự phòng cho sự cố phía nền tảng (payOS hết số dư, payOS lỗi kéo dài): job tự chi đã hết lượt và người chơi
@@ -81,9 +82,14 @@ public interface AdminFinanceService {
     record FinancePage<T>(List<T> items, long total) {
     }
 
+    /**
+     * Tiền trong kỳ; {@code refundsNeedingAttention}, {@code failedRefunds}, {@code staleRefunds} là hàng đợi việc
+     * hiện tại (mọi lúc, không theo kỳ) để khoản kẹt lâu không bị khuất. Chủ sân rút tiền lỗi không tính: tiền đã về
+     * số dư và chủ sân tự rút lại, admin không có việc gì.
+     */
     record Summary(LocalDate from, LocalDate to, double collected, double platformFee, long paymentCount,
-                   double refunded, double paidOutToOwners, long refundsNeedingAttention,
-                   long payoutsNeedingAttention, long failedRefunds, long staleRefunds) {
+                   double refunded, double paidOutToOwners, long refundsNeedingAttention, long failedRefunds,
+                   long staleRefunds) {
     }
 
     record Totals(Double amount, Double platformFee, Long count) {
