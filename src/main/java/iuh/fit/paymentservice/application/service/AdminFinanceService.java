@@ -54,10 +54,16 @@ public interface AdminFinanceService {
     /** Gửi lại thông báo cho người đang giữ khoản hoàn: người chơi, hoặc chủ sân với khoản tiền mặt. */
     RefundRow remindRefund(UUID refundId, UUID adminId);
 
-    /** CSV (UTF-8 có BOM để Excel đọc đúng tiếng Việt) theo bộ lọc, trong kỳ [from, to] theo ngày tạo/yêu cầu. */
-    String exportRefunds(RefundFilter filter, LocalDate from, LocalDate to);
+    /**
+     * Dữ liệu cho báo cáo (report-service dựng file bằng Jasper): mọi khoản hoàn khớp bộ lọc, tạo trong kỳ [from, to].
+     * Quá {@link #EXPORT_LIMIT} dòng thì từ chối kèm lời nhắc thu hẹp bộ lọc.
+     */
+    List<RefundRow> exportRefunds(RefundFilter filter, LocalDate from, LocalDate to);
 
-    String exportPayouts(PayoutFilter filter, LocalDate from, LocalDate to);
+    /** Như {@link #exportRefunds}, theo ngày yêu cầu chi. */
+    List<PayoutRow> exportPayouts(PayoutFilter filter, LocalDate from, LocalDate to);
+
+    int EXPORT_LIMIT = 10_000;
 
     enum PayoutKind { OWNER_WITHDRAWAL, REFUND }
 

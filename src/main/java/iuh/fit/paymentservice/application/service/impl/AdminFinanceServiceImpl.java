@@ -19,7 +19,6 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
@@ -27,8 +26,6 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -40,14 +37,11 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
     static final int DEFAULT_PERIOD_DAYS = 30;
     static final int MAX_PERIOD_DAYS = 366;
     private static final int MAX_PAGE_SIZE = 50;
-    // ponytail: xuất tối đa 10.000 dòng một lần (kỳ tối đa 366 ngày); cần hơn thì chia kỳ hoặc chuyển sang stream.
-    static final int EXPORT_LIMIT = 10_000;
     private static final int MAX_PEOPLE = 100;
     /** Danh sách hoàn tiền/chi trả không theo kỳ: lấy từ mốc này tới ngày mai. */
     private static final LocalDateTime BEGINNING = LocalDate.of(2000, 1, 1).atStartOfDay();
     private static final Set<RefundStatus> IN_FLIGHT = EnumSet.of(
             RefundStatus.CREATED, RefundStatus.PENDING, RefundStatus.PROCESSING);
-    private static final DateTimeFormatter CSV_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter SHORT_TIME = DateTimeFormatter.ofPattern("HH:mm dd/MM");
 
     private final AdminFinanceQueryPort query;
@@ -132,30 +126,26 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
         return query.findRefund(refundId).orElseThrow();
     }
 
+    // ponytail: tối đa 10.000 dòng một lần (kỳ tối đa 366 ngày); cần hơn thì chia kỳ hoặc phân trang ở report-service.
     @Override
-    public String exportRefunds(RefundFilter filter, LocalDate from, LocalDate to) {
+    public List<RefundRow> exportRefunds(RefundFilter filter, LocalDate from, LocalDate to) {
         Period period = period(from, to);
-        List<RefundRow> rows = findRefunds(filter, period.start(), period.endExclusive(), 0, EXPORT_LIMIT).items();
-        return csv(List.of("Mã khoản hoàn", "Tạo lúc", "Cập nhật", "Hoàn lúc", "Mã người nhận", "Khoản gốc",
-                        "Mã thanh toán", "Mô tả khoản gốc", "Số tiền", "Trạng thái", "Lý do", "Lỗi", "Số lần tự chi lại",
-                        "Mã giao dịch", "Nhắc lần cuối"),
-                rows.stream().map(row -> Arrays.asList(row.refundId(), row.createdAt(), row.updatedAt(), row.refundedAt(),
-                        row.payerId(), row.purpose(), row.paymentId(), row.paymentDescription(), row.amount(),
-                        row.status(), row.reason(), row.failureReason(), row.retryCount(), row.providerRefundId(),
-                        row.lastRemindedAt())));
+        return limited(findRefunds(filter, period.start(), period.endExclusive(), 0, EXPORT_LIMIT + 1).items(), "khoản hoàn");
     }
 
     @Override
-    public String exportPayouts(PayoutFilter filter, LocalDate from, LocalDate to) {
+    public List<PayoutRow> exportPayouts(PayoutFilter filter, LocalDate from, LocalDate to) {
         Period period = period(from, to);
-        List<PayoutRow> rows = findPayouts(filter, period.start(), period.endExclusive(), 0, EXPORT_LIMIT).items();
-        return csv(List.of("Mã lượt chi", "Loại", "Yêu cầu lúc", "Hoàn tất lúc", "Mã người nhận", "Chủ tài khoản",
-                        "Ngân hàng (BIN)", "Số tài khoản", "Số tiền", "Trạng thái", "Mã tham chiếu", "Mã payOS",
-                        "Mã lỗi", "Lỗi"),
-                rows.stream().map(row -> Arrays.asList(row.payoutId(), row.kind(), row.requestedAt(), row.completedAt(),
-                        row.payeeId(), row.destinationAccountName(), row.destinationBankBin(),
-                        row.destinationAccountMasked(), row.amount(), row.status(), row.referenceId(),
-                        row.providerPayoutId(), row.failureCode(), row.failureReason())));
+        return limited(findPayouts(filter, period.start(), period.endExclusive(), 0, EXPORT_LIMIT + 1).items(), "lượt chi");
+    }
+
+    /** Lấy dư một dòng để biết có vượt giới hạn không; vượt thì báo rõ thay vì cắt bớt âm thầm. */
+    private static <T> List<T> limited(List<T> rows, String unit) {
+        if (rows.size() > EXPORT_LIMIT) {
+            throw new PaymentConflictException("EXPORT_TOO_LARGE", "Có hơn " + String.format(Locale.forLanguageTag("vi-VN"),
+                    "%,d", EXPORT_LIMIT) + " " + unit + " khớp bộ lọc. Hãy thu hẹp kỳ hoặc bộ lọc rồi xuất lại.");
+        }
+        return rows;
     }
 
     private FinancePage<RefundRow> findRefunds(RefundFilter filter, LocalDateTime from, LocalDateTime to, int page, int size) {
@@ -211,23 +201,6 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
 
     private static Collection<UUID> people(Collection<UUID> people) {
         return people == null ? List.of() : people.stream().filter(Objects::nonNull).distinct().limit(MAX_PEOPLE).toList();
-    }
-
-    /** UTF-8 BOM để Excel nhận đúng tiếng Việt; ô chữ bắt đầu bằng = + - @ bị chặn công thức (CSV injection). */
-    static String csv(List<String> header, Stream<List<Object>> rows) {
-        return "﻿" + Stream.concat(Stream.of(List.<Object>copyOf(header)), rows)
-                .map(cells -> cells.stream().map(AdminFinanceServiceImpl::cell).collect(Collectors.joining(",")))
-                .collect(Collectors.joining("\r\n", "", "\r\n"));
-    }
-
-    private static String cell(Object value) {
-        if (value == null) return "";
-        if (value instanceof Double amount) return String.format(Locale.ROOT, "%.0f", amount);
-        if (value instanceof Number number) return number.toString();
-        String text = value instanceof LocalDateTime time ? time.format(CSV_TIME) : value.toString();
-        if (!text.isEmpty() && "=+-@\t\r".indexOf(text.charAt(0)) >= 0) text = "'" + text;
-        return text.contains(",") || text.contains("\"") || text.contains("\n") || text.contains("\r")
-                ? "\"" + text.replace("\"", "\"\"") + "\"" : text;
     }
 
     private static LocalDateTime min(LocalDateTime a, LocalDateTime b) {

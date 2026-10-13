@@ -136,15 +136,15 @@ class AdminFinanceQueryTests {
     }
 
     @Test
-    void exportsRefundsAsExcelFriendlyCsvWithoutFormulaInjection() {
+    void exportsEveryMatchingRefundCreatedInThePeriodForTheReportService() {
         UUID paid = payment(UUID.randomUUID(), 100_000, 0, "SUCCEEDED", DAY.atTime(9, 0));
-        refund(paid, 60_000, "SUCCEEDED", "=HYPERLINK(\"x\"), GSCSV300", DAY.atTime(12, 0));
+        UUID inPeriod = refund(paid, 60_000, "SUCCEEDED", "Hủy booking GSEXP300", DAY.atTime(12, 0));
+        refund(paid, 10_000, "SUCCEEDED", "Hủy booking GSEXP300", DAY.minusDays(3).atTime(12, 0));
 
-        String csv = adminFinanceService.exportRefunds(new RefundFilter(null, "gscsv300", null, null), DAY, DAY);
+        List<RefundRow> rows = adminFinanceService.exportRefunds(new RefundFilter(null, "gsexp300", null, null), DAY, DAY);
 
-        assertThat(csv).startsWith("﻿Mã khoản hoàn,");
-        assertThat(csv).contains(",60000,SUCCEEDED,\"'=HYPERLINK(\"\"x\"\"), GSCSV300\",");
-        assertThat(csv.lines()).hasSize(2);
+        assertThat(rows).extracting(RefundRow::refundId).containsExactly(inPeriod);
+        assertThat(rows.getFirst().paymentDescription()).isEqualTo("Đặt cọc");
     }
 
     private List<UUID> ids(RefundFilter filter) {

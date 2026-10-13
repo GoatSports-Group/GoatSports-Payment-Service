@@ -19,9 +19,6 @@ import iuh.fit.paymentservice.domain.enums.RefundStatus;
 import iuh.fit.shared.annotation.AuditLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,7 +27,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -81,20 +77,6 @@ public class FinanceAdminController {
         return adminFinanceService.getRefunds(new RefundFilter(status, q, people, olderThanDays), page, size);
     }
 
-    @GetMapping("/refunds/export")
-    @PreAuthorize("hasAuthority('GET_PLATFORM_FINANCE')")
-    public ResponseEntity<String> exportRefunds(
-            @RequestParam(required = false) List<RefundStatus> status,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) List<UUID> people,
-            @RequestParam(required = false) Integer olderThanDays,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
-    ) {
-        return csv("hoan-tien", adminFinanceService.exportRefunds(
-                new RefundFilter(status, q, people, olderThanDays), from, to));
-    }
-
     @GetMapping("/refunds/{refundId}")
     @PreAuthorize("hasAuthority('GET_PLATFORM_FINANCE')")
     public RefundDetail refund(@PathVariable UUID refundId) {
@@ -112,20 +94,6 @@ public class FinanceAdminController {
             @RequestParam(defaultValue = "20") int size
     ) {
         return adminFinanceService.getPayouts(new PayoutFilter(kind, status, q, people), page, size);
-    }
-
-    @GetMapping("/payouts/export")
-    @PreAuthorize("hasAuthority('GET_PLATFORM_FINANCE')")
-    public ResponseEntity<String> exportPayouts(
-            @RequestParam(defaultValue = "OWNER_WITHDRAWAL") PayoutKind kind,
-            @RequestParam(required = false) List<PayoutStatus> status,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) List<UUID> people,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
-    ) {
-        return csv(kind == PayoutKind.REFUND ? "chi-hoan" : "chu-san-rut-tien",
-                adminFinanceService.exportPayouts(new PayoutFilter(kind, status, q, people), from, to));
     }
 
     /** Dự phòng sự cố phía nền tảng; từng khoản lỗi thì người chơi tự bấm "Thử lại". */
@@ -149,14 +117,5 @@ public class FinanceAdminController {
         } catch (IllegalArgumentException exception) {
             return null;
         }
-    }
-
-    /** Chuỗi trả thẳng (ResponseCustom không bọc String) nên client nhận đúng file CSV. */
-    private static ResponseEntity<String> csv(String name, String body) {
-        return ResponseEntity.ok()
-                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + name + "-" + LocalDate.now() + ".csv\"")
-                .body(body);
     }
 }
