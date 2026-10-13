@@ -60,4 +60,6 @@ public class RefundEntity extends BaseEntity {
     private Integer retryCount = 0;
     @Column(name = "refunded_at")
     private LocalDateTime refundedAt;
+    @Column(name = "last_reminded_at", insertable = false, updatable = false)
+    private LocalDateTime lastRemindedAt;
 }

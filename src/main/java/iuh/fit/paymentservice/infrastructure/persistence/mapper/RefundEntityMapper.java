@@ -11,6 +11,7 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
 public interface RefundEntityMapper {
     @Mapping(target = "payment", ignore = true)
     @Mapping(target = "retryCount", defaultValue = "0")
+    @Mapping(target = "lastRemindedAt", ignore = true)
     RefundEntity toEntity(Refund refund);
 
     @Mapping(target = "refundId", ignore = true)
@@ -21,6 +22,7 @@ public interface RefundEntityMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "retryCount", nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "lastRemindedAt", ignore = true)
     void updateEntity(Refund refund, @MappingTarget RefundEntity refundEntity);
 
     Refund toDomain(RefundEntity refundEntity);

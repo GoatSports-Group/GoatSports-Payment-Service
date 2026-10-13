@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -58,8 +59,9 @@ public class AdminFinanceQueryAdapter implements AdminFinanceQueryPort {
     }
 
     @Override
-    public FinancePage<RefundRow> findRefunds(Collection<RefundStatus> statuses, int page, int size) {
-        return page(repository.findRefunds(statuses, PageRequest.of(page, size)));
+    public FinancePage<RefundRow> findRefunds(Collection<RefundStatus> statuses, String keyword, Collection<UUID> people,
+                                              LocalDateTime from, LocalDateTime to, int page, int size) {
+        return page(repository.findRefunds(statuses, keyword, nonEmpty(people), from, to, PageRequest.of(page, size)));
     }
 
     @Override
@@ -68,8 +70,36 @@ public class AdminFinanceQueryAdapter implements AdminFinanceQueryPort {
     }
 
     @Override
-    public FinancePage<PayoutRow> findPayouts(boolean ownerWithdrawals, Collection<PayoutStatus> statuses, int page, int size) {
-        return page(repository.findPayouts(ownerWithdrawals, statuses, PageRequest.of(page, size)));
+    public Optional<PayoutRow> findRefundPayout(UUID refundId) {
+        return repository.findRefundPayout(refundId);
+    }
+
+    @Override
+    public long countRefundsCreatedBefore(Collection<RefundStatus> statuses, LocalDateTime before) {
+        return repository.countRefundsCreatedBefore(statuses, before);
+    }
+
+    @Override
+    public List<UUID> findRefundIds(RefundStatus status, int limit) {
+        return repository.findRefundIds(status, PageRequest.of(0, limit));
+    }
+
+    @Override
+    public boolean markReminded(UUID refundId, LocalDateTime now, LocalDateTime cutoff) {
+        return repository.markReminded(refundId, now, cutoff) > 0;
+    }
+
+    @Override
+    public FinancePage<PayoutRow> findPayouts(boolean ownerWithdrawals, Collection<PayoutStatus> statuses, String keyword,
+                                              Collection<UUID> people, LocalDateTime from, LocalDateTime to,
+                                              int page, int size) {
+        return page(repository.findPayouts(ownerWithdrawals, statuses, keyword, nonEmpty(people), from, to,
+                PageRequest.of(page, size)));
+    }
+
+    /** {@code in ()} không hợp lệ trong SQL: không có ai thì truyền một mã không thuộc người nào. */
+    private static Collection<UUID> nonEmpty(Collection<UUID> people) {
+        return people == null || people.isEmpty() ? List.of(new UUID(0, 0)) : people;
     }
 
     private static <T> FinancePage<T> page(Page<T> result) {

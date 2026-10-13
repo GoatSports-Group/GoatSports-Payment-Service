@@ -2,12 +2,16 @@ package iuh.fit.paymentservice;
 
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.service.AdminFinanceService;
+import iuh.fit.paymentservice.application.service.AdminFinanceService.BulkRetryResult;
 import iuh.fit.paymentservice.application.service.AdminFinanceService.FinancePage;
 import iuh.fit.paymentservice.application.service.AdminFinanceService.PaymentRow;
+import iuh.fit.paymentservice.application.service.AdminFinanceService.PayoutFilter;
+import iuh.fit.paymentservice.application.service.AdminFinanceService.RefundFilter;
 import iuh.fit.paymentservice.application.service.AdminFinanceService.RefundRow;
 import iuh.fit.paymentservice.application.service.AdminFinanceService.Summary;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import iuh.fit.paymentservice.domain.enums.RefundStatus;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +36,15 @@ class AdminFinanceQueryTests {
     @Autowired private AdminFinanceService adminFinanceService;
     @Autowired private JdbcTemplate jdbc;
 
+    /** Các test dùng chung một DB trong bộ nhớ và kiểm tra số đếm toàn sàn: dọn trước mỗi test. */
+    @BeforeEach
+    void clean() {
+        jdbc.update("delete from payouts");
+        jdbc.update("delete from refunds");
+        jdbc.update("delete from payment_attempts");
+        jdbc.update("delete from payments");
+    }
+
     @Test
     void summarizesThePeriodAndListsAttentionRefundsWithPayerContext() {
         UUID payer = UUID.randomUUID();
@@ -52,28 +65,95 @@ class AdminFinanceQueryTests {
         assertThat(summary.refunded()).isEqualTo(30_000);
         assertThat(summary.refundsNeedingAttention()).isEqualTo(2);
 
-        FinancePage<RefundRow> attention = adminFinanceService.getRefunds(AdminFinanceService.REFUNDS_NEEDING_ATTENTION, 0, 20);
+        FinancePage<RefundRow> attention = adminFinanceService.getRefunds(
+                new RefundFilter(AdminFinanceService.REFUNDS_NEEDING_ATTENTION, null, null, null), 0, 20);
         assertThat(attention.total()).isEqualTo(2);
         RefundRow failedRow = attention.items().stream().filter(row -> row.refundId().equals(failed)).findFirst().orElseThrow();
         assertThat(failedRow.payerId()).isEqualTo(payer);
-        assertThat(failedRow.retryable()).isTrue();
+        assertThat(failedRow.remindable()).isTrue();
         assertThat(attention.items()).filteredOn(row -> row.status() == RefundStatus.MANUAL_REVIEW)
-                .singleElement().satisfies(row -> assertThat(row.retryable()).isFalse());
+                .singleElement().satisfies(row -> assertThat(row.remindable()).isTrue());
 
         FinancePage<PaymentRow> succeeded = adminFinanceService.getPayments(
                 List.of(PaymentStatus.SUCCEEDED), null, DAY.minusDays(60), DAY, 0, 1);
         assertThat(succeeded.total()).isEqualTo(2);
         assertThat(succeeded.items()).hasSize(1);
-        assertThat(adminFinanceService.getPayouts(AdminFinanceService.PayoutKind.OWNER_WITHDRAWAL, null, 0, 20).total())
-                .isZero();
+        assertThat(adminFinanceService.getPayouts(
+                new PayoutFilter(AdminFinanceService.PayoutKind.OWNER_WITHDRAWAL, null, null, null), 0, 20).total()).isZero();
     }
 
     @Test
-    void refusesToRetryARefundThatIsNotFailed() {
-        UUID paid = payment(UUID.randomUUID(), 100_000, 0, "SUCCEEDED", DAY.atTime(9, 0));
-        UUID manual = refund(paid, 10_000, "MANUAL_REVIEW", null);
+    void searchesByReasonOrPersonAndFiltersRefundsWaitingTooLong() {
+        UUID payer = UUID.randomUUID();
+        UUID paid = payment(payer, 100_000, 0, "SUCCEEDED", DAY.atTime(9, 0));
+        long staleBefore = adminFinanceService.getSummary(DAY, DAY).staleRefunds();
+        UUID old = refund(paid, 10_000, "AWAITING_CLAIM", "Hủy booking GSOLD100: 100%_ưu đãi",
+                LocalDateTime.now().minusDays(10));
+        UUID fresh = refund(paid, 20_000, "AWAITING_CLAIM", "Hủy booking GSNEW200", LocalDateTime.now().minusHours(1));
 
-        assertThatThrownBy(() -> adminFinanceService.retryRefund(manual)).isInstanceOf(PaymentConflictException.class);
+        // Ký tự đại diện người dùng gõ (%, _) được escape: chỉ khớp đúng chuỗi.
+        assertThat(ids(new RefundFilter(null, "gsold100: 100%_", null, null))).containsExactly(old);
+        assertThat(ids(new RefundFilter(null, "gsold100: 100%%", null, null))).isEmpty();
+        // Tìm theo người: frontend tra tên/email ra mã rồi gửi kèm từ khóa.
+        assertThat(ids(new RefundFilter(null, "Nguyễn Văn A", List.of(payer), null)))
+                .containsExactlyInAnyOrder(old, fresh);
+        assertThat(ids(new RefundFilter(null, "gsold100", null, 7))).containsExactly(old);
+        assertThat(ids(new RefundFilter(null, "gsnew200", null, 7))).isEmpty();
+        assertThat(adminFinanceService.getSummary(DAY, DAY).staleRefunds()).isEqualTo(staleBefore + 1);
+    }
+
+    @Test
+    void remindsTheRecipientAtMostOncePerCooldownThroughTheOutbox() {
+        UUID paid = payment(UUID.randomUUID(), 100_000, 0, "SUCCEEDED", DAY.atTime(9, 0));
+        UUID waiting = refund(paid, 10_000, "AWAITING_BANK_ACCOUNT", "Hủy sân", LocalDateTime.now().minusDays(9));
+        UUID done = refund(paid, 10_000, "SUCCEEDED", "Hủy sân", LocalDateTime.now().minusDays(9));
+
+        RefundRow reminded = adminFinanceService.remindRefund(waiting, UUID.randomUUID());
+
+        assertThat(reminded.lastRemindedAt()).isNotNull();
+        assertThat(outboxReminders(waiting)).isEqualTo(1);
+        assertThatThrownBy(() -> adminFinanceService.remindRefund(waiting, null))
+                .isInstanceOf(PaymentConflictException.class).hasMessageContaining("đã được nhắc");
+        assertThatThrownBy(() -> adminFinanceService.remindRefund(done, null))
+                .isInstanceOf(PaymentConflictException.class);
+        assertThat(outboxReminders(waiting)).isEqualTo(1);
+        assertThat(adminFinanceService.getRefund(waiting).payout()).isNull();
+    }
+
+    @Test
+    void bulkRetryKeepsGoingWhenARefundCannotBePaidOut() {
+        UUID paid = payment(UUID.randomUUID(), 100_000, 0, "SUCCEEDED", DAY.atTime(9, 0));
+        UUID failed = refund(paid, 10_000, "FAILED", "Hủy sân", LocalDateTime.now().minusDays(1));
+        UUID cash = refund(paid, 10_000, "MANUAL_REVIEW", "Hủy sân", LocalDateTime.now().minusDays(1));
+
+        // Người chơi chưa có tài khoản ngân hàng: lượt chi bị từ chối nhưng không làm hỏng cả lô.
+        BulkRetryResult result = adminFinanceService.retryFailedRefunds();
+
+        // Chỉ khoản chi lỗi; khoản tiền mặt là việc của chủ sân, không chi qua payOS.
+        assertThat(result).isEqualTo(new BulkRetryResult(1, 0, 0, 1));
+        assertThat(adminFinanceService.getRefund(failed).refund().status()).isEqualTo(RefundStatus.FAILED);
+        assertThat(adminFinanceService.getRefund(cash).refund().status()).isEqualTo(RefundStatus.MANUAL_REVIEW);
+    }
+
+    @Test
+    void exportsRefundsAsExcelFriendlyCsvWithoutFormulaInjection() {
+        UUID paid = payment(UUID.randomUUID(), 100_000, 0, "SUCCEEDED", DAY.atTime(9, 0));
+        refund(paid, 60_000, "SUCCEEDED", "=HYPERLINK(\"x\"), GSCSV300", DAY.atTime(12, 0));
+
+        String csv = adminFinanceService.exportRefunds(new RefundFilter(null, "gscsv300", null, null), DAY, DAY);
+
+        assertThat(csv).startsWith("﻿Mã khoản hoàn,");
+        assertThat(csv).contains(",60000,SUCCEEDED,\"'=HYPERLINK(\"\"x\"\"), GSCSV300\",");
+        assertThat(csv.lines()).hasSize(2);
+    }
+
+    private List<UUID> ids(RefundFilter filter) {
+        return adminFinanceService.getRefunds(filter, 0, 50).items().stream().map(RefundRow::refundId).toList();
+    }
+
+    private Integer outboxReminders(UUID refundId) {
+        return jdbc.queryForObject("select count(*) from payment_event_outbox "
+                + "where event_type = 'reminder.refund-pending.v1' and payload like ?", Integer.class, "%" + refundId + "%");
     }
 
     private UUID payment(UUID payer, double amount, double fee, String status, LocalDateTime paidAt) {
@@ -89,13 +169,22 @@ class AdminFinanceQueryTests {
     }
 
     private UUID refund(UUID paymentId, double amount, String status, LocalDateTime refundedAt) {
+        return refund(paymentId, amount, status, "Hủy sân", DAY.atTime(12, 0), refundedAt);
+    }
+
+    private UUID refund(UUID paymentId, double amount, String status, String reason, LocalDateTime createdAt) {
+        return refund(paymentId, amount, status, reason, createdAt, null);
+    }
+
+    private UUID refund(UUID paymentId, double amount, String status, String reason, LocalDateTime createdAt,
+                        LocalDateTime refundedAt) {
         UUID id = UUID.randomUUID();
         jdbc.update("""
                 insert into refunds (refund_id, payment_id, requested_by, reason, amount, idempotency_key,
                     auto_disburse, status, refunded_at, retry_count, created_at, updated_at, created_by, updated_by)
-                values (?, ?, ?, 'Hủy sân', ?, ?, true, ?, ?, 6, ?, ?, 'test', 'test')
-                """, id, paymentId, UUID.randomUUID(), amount, "refund-" + id, status, refundedAt,
-                DAY.atTime(12, 0), DAY.atTime(12, 0));
+                values (?, ?, ?, ?, ?, ?, true, ?, ?, 6, ?, ?, 'test', 'test')
+                """, id, paymentId, UUID.randomUUID(), reason, amount, "refund-" + id, status, refundedAt,
+                createdAt, createdAt);
         return id;
     }
 }

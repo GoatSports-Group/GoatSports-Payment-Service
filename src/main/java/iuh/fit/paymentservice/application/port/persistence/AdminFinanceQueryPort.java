@@ -12,6 +12,7 @@ import iuh.fit.paymentservice.domain.enums.RefundStatus;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,9 +33,26 @@ public interface AdminFinanceQueryPort {
     FinancePage<PaymentRow> findPayments(Collection<PaymentStatus> statuses, Collection<PaymentPurpose> purposes,
                                          LocalDateTime from, LocalDateTime to, int page, int size);
 
-    FinancePage<RefundRow> findRefunds(Collection<RefundStatus> statuses, int page, int size);
+    /**
+     * Khoản hoàn tạo trong [from, to), cập nhật mới nhất trước. {@code keyword}: mẫu LIKE chữ thường, rỗng = không
+     * tìm; {@code people} được coi là khớp khi có tìm.
+     */
+    FinancePage<RefundRow> findRefunds(Collection<RefundStatus> statuses, String keyword, Collection<UUID> people,
+                                       LocalDateTime from, LocalDateTime to, int page, int size);
 
     Optional<RefundRow> findRefund(UUID refundId);
 
-    FinancePage<PayoutRow> findPayouts(boolean ownerWithdrawals, Collection<PayoutStatus> statuses, int page, int size);
+    Optional<PayoutRow> findRefundPayout(UUID refundId);
+
+    long countRefundsCreatedBefore(Collection<RefundStatus> statuses, LocalDateTime before);
+
+    /** Mã khoản hoàn ở trạng thái này, cũ nhất trước. */
+    List<UUID> findRefundIds(RefundStatus status, int limit);
+
+    /** Ghi lượt nhắc nếu lần nhắc trước đã cũ hơn {@code cutoff}; false nếu vừa nhắc gần đây. */
+    boolean markReminded(UUID refundId, LocalDateTime now, LocalDateTime cutoff);
+
+    /** Lượt chi yêu cầu trong [from, to), mới nhất trước; tìm như {@link #findRefunds}. */
+    FinancePage<PayoutRow> findPayouts(boolean ownerWithdrawals, Collection<PayoutStatus> statuses, String keyword,
+                                       Collection<UUID> people, LocalDateTime from, LocalDateTime to, int page, int size);
 }

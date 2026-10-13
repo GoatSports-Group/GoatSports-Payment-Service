@@ -3,7 +3,9 @@ package iuh.fit.paymentservice.application.service.impl;
 import iuh.fit.paymentservice.application.dto.event.DomainEventEnvelope;
 import iuh.fit.paymentservice.application.dto.event.PaymentEventPayload;
 import iuh.fit.paymentservice.application.dto.event.RefundEventPayload;
+import iuh.fit.paymentservice.application.dto.event.RefundReminderPayload;
 import iuh.fit.paymentservice.application.port.event.DomainEventPublisherPort;
+import iuh.fit.paymentservice.application.service.AdminFinanceService;
 import iuh.fit.paymentservice.application.service.PaymentDomainEventService;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
@@ -28,6 +30,7 @@ public class PaymentDomainEventServiceImpl implements PaymentDomainEventService 
     static final String REFUND_MANUAL_REVIEW = "refund.manual-review.v1";
     static final String REFUND_AWAITING_BANK_ACCOUNT = "refund.awaiting-bank-account.v1";
     static final String REFUND_PROCESSING = "refund.processing.v1";
+    static final String REFUND_REMINDER = "reminder.refund-pending.v1";
 
     private final DomainEventPublisherPort domainEventPublisherPort;
 
@@ -89,6 +92,13 @@ public class PaymentDomainEventServiceImpl implements PaymentDomainEventService 
                 payerId
         );
         append(eventType, refund.getRefundId(), refund.getPaymentId(), refund.getRequestedBy(), payload);
+    }
+
+    @Override
+    public void recordRefundReminder(AdminFinanceService.RefundRow refund, UUID adminId) {
+        append(REFUND_REMINDER, refund.refundId(), refund.paymentId(), adminId, new RefundReminderPayload(
+                refund.refundId(), refund.paymentId(), refund.payerId(), refund.purpose(), refund.amount(),
+                refund.status()));
     }
 
     private void append(

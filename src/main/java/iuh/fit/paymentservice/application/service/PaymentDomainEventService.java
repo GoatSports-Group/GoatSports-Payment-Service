@@ -11,4 +11,6 @@ public interface PaymentDomainEventService {
     void recordPaymentResult(Payment payment, PaymentAttempt attempt, UUID actorId);
 
     void recordRefundResult(Refund refund, PaymentStatus paymentStatus, UUID payerId);
+
+    void recordRefundReminder(AdminFinanceService.RefundRow refund, UUID adminId);
 }

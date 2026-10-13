@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd">
+
+    <changeSet id="20261013-01-add-refund-last-reminded-at" author="claude">
+        <comment>Lan cuoi admin nhac nguoi nhan xu ly khoan hoan dang treo (gioi han 1 lan / 24 gio)</comment>
+        <addColumn tableName="refunds">
+            <column name="last_reminded_at" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>
