@@ -61,6 +61,7 @@ class RefundIntegrationTests {
                 Map.entry("autoDisburse", Boolean.class),
                 Map.entry("status", RefundStatus.class),
                 Map.entry("failureReason", String.class),
+                Map.entry("lastRemindedAt", LocalDateTime.class),
                 Map.entry("refundedAt", LocalDateTime.class),
                 Map.entry("retryCount", Integer.class)
         ));
@@ -80,7 +81,7 @@ class RefundIntegrationTests {
         )).containsExactlyInAnyOrder(
                 "refund_id", "payment_id", "requested_by", "reason", "amount",
                 "provider_refund_id", "idempotency_key", "auto_disburse", "status", "failure_reason",
-                "refunded_at", "retry_count", "created_at", "updated_at", "created_by", "updated_by"
+                "refunded_at", "retry_count", "created_at", "updated_at", "created_by", "updated_by", "last_reminded_at"
         );
     }
 

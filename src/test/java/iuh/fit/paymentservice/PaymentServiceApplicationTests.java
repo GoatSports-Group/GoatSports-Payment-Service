@@ -69,7 +69,7 @@ class PaymentServiceApplicationTests {
                 Integer.class
         );
 
-        assertThat(changeCount).isEqualTo(18);
+        assertThat(changeCount).isEqualTo(19);
 
         List<String> paymentColumns = jdbcTemplate.queryForList(
                 "select column_name from information_schema.columns " +
