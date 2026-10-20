@@ -192,6 +192,14 @@ public class RefundDisbursementServiceImpl implements RefundDisbursementService 
         ));
         if (payout.getStatus() == PayoutStatus.SUCCEEDED) return refund;
         if (payout.getStatus() == PayoutStatus.FAILED || payout.getStatus() == PayoutStatus.CANCELLED) {
+            // Lần chi trước báo lỗi chưa chắc payOS đã không chuyển (vd timeout sau khi payOS đã nhận lệnh). Hỏi lại theo
+            // referenceId cũ trước khi chi sang tài khoản mặc định hiện tại, để không hoàn hai lần vào hai tài khoản.
+            ProviderPayoutResult previous = payoutProviderPort.findByReference(payout.getReferenceId()).orElse(null);
+            if (previous != null && (previous.status() == PayoutStatus.SUCCEEDED
+                    || previous.status() == PayoutStatus.PROCESSING)) {
+                payout.setProviderPayoutId(previous.providerPayoutId());
+                return applyProviderResult(payout, previous);
+            }
             prepareRetry(payout, account, refund);
             payout = payoutRepository.save(payout);
         }

@@ -18,7 +18,6 @@ public interface PayoutEntityMapper {
     @Mapping(target = "settlement", ignore = true)
     @Mapping(target = "refundId", ignore = true)
     @Mapping(target = "refund", ignore = true)
-    @Mapping(target = "bankAccountId", ignore = true)
     @Mapping(target = "bankAccount", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)

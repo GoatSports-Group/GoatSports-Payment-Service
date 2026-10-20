@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import vn.payos.exception.APIException;
+import vn.payos.model.v1.payouts.GetPayoutListParams;
 import vn.payos.model.v1.payouts.PayoutApprovalState;
 import vn.payos.model.v1.payouts.PayoutTransaction;
 import vn.payos.model.v1.payouts.PayoutTransactionState;
@@ -20,6 +21,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -68,6 +70,22 @@ public class PayOsPayoutAdapter implements PayoutProviderPort {
             return map(clientProvider.get().payouts().get(providerPayoutId));
         } catch (APIException exception) {
             throw providerException("query", exception);
+        } catch (RuntimeException exception) {
+            throw new PaymentProviderException("PAYOS_PAYOUT_QUERY_ERROR", "Không thể đối soát payout payOS", exception);
+        }
+    }
+
+    @Override
+    public Optional<ProviderPayoutResult> findByReference(String referenceId) {
+        try {
+            List<vn.payos.model.v1.payouts.Payout> items = clientProvider.get().payouts()
+                    .list(GetPayoutListParams.builder().referenceId(referenceId).limit(1).build())
+                    .getItems();
+            return items == null || items.isEmpty() ? Optional.empty() : Optional.of(map(items.getFirst()));
+        } catch (PaymentProviderException exception) {
+            throw exception;
+        } catch (APIException exception) {
+            throw providerException("lookup", exception);
         } catch (RuntimeException exception) {
             throw new PaymentProviderException("PAYOS_PAYOUT_QUERY_ERROR", "Không thể đối soát payout payOS", exception);
         }

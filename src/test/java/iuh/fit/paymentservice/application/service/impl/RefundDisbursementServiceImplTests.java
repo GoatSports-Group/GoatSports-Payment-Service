@@ -191,6 +191,55 @@ class RefundDisbursementServiceImplTests {
         assertThat(failedPayout.getBankAccountId()).isEqualTo(accountId);
         assertThat(result.getStatus()).isEqualTo(RefundStatus.PROCESSING);
         assertThat(account.getStatus()).isEqualTo(BankAccountStatus.PENDING_VERIFICATION);
+        // payOS không có payout nào với referenceId cũ thì mới chi lại.
+        verify(payoutProviderPort).findByReference("old-reference");
+    }
+
+    /**
+     * Lần chi trước bị báo lỗi (timeout) nhưng payOS thực ra đã chuyển vào tài khoản cũ. Người chơi đổi mặc định rồi
+     * bấm nhận lại: không được chi lần hai vào tài khoản mới, mà ghi nhận khoản đã chuyển vào tài khoản cũ.
+     */
+    @Test
+    void doesNotPayTwiceWhenThePreviouslyFailedPayoutActuallyWentThrough() {
+        UUID refundId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID payerId = UUID.randomUUID();
+        UUID oldAccountId = UUID.randomUUID();
+        Refund refund = Refund.builder().refundId(refundId).paymentId(paymentId).requestedBy(payerId)
+                .amount(30_000D).status(RefundStatus.FAILED).build();
+        Payment payment = Payment.builder().paymentId(paymentId).payerId(payerId).amount(30_000D)
+                .status(PaymentStatus.SUCCEEDED).build();
+        BankAccount newDefault = BankAccount.builder().bankAccountId(UUID.randomUUID()).payeeId(payerId)
+                .bankBin("970436").accountNumberLast4("4723").status(BankAccountStatus.VERIFIED).isDefault(true).build();
+        BankAccount oldAccount = BankAccount.builder().bankAccountId(oldAccountId).payeeId(payerId)
+                .bankBin("970415").accountNumberLast4("6077").status(BankAccountStatus.PENDING_VERIFICATION)
+                .isDefault(false).build();
+        Payout failedPayout = Payout.builder().payoutId(UUID.randomUUID()).refundId(refundId)
+                .bankAccountId(oldAccountId).referenceId("refund-" + refundId).idempotencyKey("refund-payout-" + refundId)
+                .destinationAccountMasked("****6077").status(PayoutStatus.FAILED).failureCode("PAYOS_PAYOUT_ERROR").build();
+
+        when(refundRepository.findByIdForUpdate(refundId)).thenReturn(Optional.of(refund));
+        when(paymentRepository.findByIdForUpdate(paymentId)).thenReturn(Optional.of(payment));
+        when(bankAccountRepository.findDefaultByPayeeIdAndStatuses(eq(payerId), anyCollection()))
+                .thenReturn(Optional.of(newDefault));
+        when(bankAccountRepository.findByIdForUpdate(oldAccountId)).thenReturn(Optional.of(oldAccount));
+        when(payoutRepository.findByRefundId(refundId)).thenReturn(Optional.of(failedPayout));
+        when(payoutRepository.save(any(Payout.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(refundRepository.save(any(Refund.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(refundRepository.findByPaymentIdAndStatuses(eq(paymentId), anyCollection())).thenReturn(List.of(refund));
+        when(payoutProviderPort.findByReference("refund-" + refundId)).thenReturn(Optional.of(new ProviderPayoutResult(
+                "payos-payout-1", "NGUYEN VAN A", PayoutStatus.SUCCEEDED, null, null)));
+
+        Refund result = service.claim(refundId, payerId);
+
+        verify(payoutProviderPort, org.mockito.Mockito.never()).create(any());
+        assertThat(result.getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
+        assertThat(failedPayout.getStatus()).isEqualTo(PayoutStatus.SUCCEEDED);
+        assertThat(failedPayout.getProviderPayoutId()).isEqualTo("payos-payout-1");
+        // Tiền đã về tài khoản cũ: payout giữ tài khoản cũ, tài khoản cũ được xác minh, tài khoản mới không bị đụng tới.
+        assertThat(failedPayout.getBankAccountId()).isEqualTo(oldAccountId);
+        assertThat(oldAccount.getStatus()).isEqualTo(BankAccountStatus.VERIFIED);
+        assertThat(newDefault.getIsDefault()).isTrue();
     }
 
     @Test

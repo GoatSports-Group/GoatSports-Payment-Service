@@ -18,4 +18,5 @@
     <include file="/db/changelog/schema/27-09-2026/add-refund-retry-count.xml"/>
     <include file="/db/changelog/schema/09-10-2026/drop-settlement-items.xml"/>
     <include file="/db/changelog/schema/13-10-2026/add-refund-last-reminded-at.xml"/>
+    <include file="/db/changelog/schema/21-10-2026/repair-payout-bank-accounts.xml"/>
 </databaseChangeLog>

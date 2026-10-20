@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-5.0.xsd">
+
+    <!--
+      Lỗi cũ: chi lại sau lỗi đổi sang tài khoản mặc định mới nhưng payouts.bank_account_id không được cập nhật
+      (PayoutEntityMapper bỏ qua cột này). payOS chuyển tới tài khoản ghi ở destination_*, còn bank_account_id vẫn là
+      tài khoản của lần lỗi; tài khoản đó còn bị đánh dấu VERIFIED dù chưa từng nhận tiền.
+      1) Tài khoản bị ghi nhầm mà chưa từng thật sự nhận khoản chi nào: trả về PENDING_VERIFICATION.
+      2) Trỏ payout về đúng tài khoản nhận (cùng người nhận, cùng ngân hàng, cùng 4 số cuối; chỉ khi có đúng một tài khoản khớp).
+    -->
+    <changeSet id="20261021-01-unverify-wrongly-credited-accounts" author="minhdat">
+        <sql>
+            UPDATE bank_accounts
+            SET status = 'PENDING_VERIFICATION', verified_at = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE status = 'VERIFIED'
+              AND bank_account_id IN (
+                  SELECT p.bank_account_id FROM payouts p
+                  JOIN bank_accounts r ON r.bank_account_id = p.bank_account_id
+                  WHERE r.bank_bin &lt;&gt; p.destination_bank_bin
+                     OR r.account_number_last4 &lt;&gt; RIGHT(p.destination_account_masked, 4))
+              AND NOT EXISTS (
+                  SELECT 1 FROM payouts q
+                  WHERE q.status = 'SUCCEEDED'
+                    AND q.destination_bank_bin = bank_accounts.bank_bin
+                    AND RIGHT(q.destination_account_masked, 4) = bank_accounts.account_number_last4
+                    AND EXISTS (SELECT 1 FROM bank_accounts o
+                                WHERE o.bank_account_id = q.bank_account_id AND o.payee_id = bank_accounts.payee_id));
+        </sql>
+    </changeSet>
+
+    <changeSet id="20261021-02-repoint-payouts-to-paid-account" author="minhdat">
+        <sql>
+            UPDATE payouts
+            SET bank_account_id = (
+                    SELECT c.bank_account_id FROM bank_accounts c
+                    JOIN bank_accounts r ON r.payee_id = c.payee_id
+                    WHERE r.bank_account_id = payouts.bank_account_id
+                      AND c.bank_bin = payouts.destination_bank_bin
+                      AND c.account_number_last4 = RIGHT(payouts.destination_account_masked, 4)),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE EXISTS (
+                    SELECT 1 FROM bank_accounts r
+                    WHERE r.bank_account_id = payouts.bank_account_id
+                      AND (r.bank_bin &lt;&gt; payouts.destination_bank_bin
+                           OR r.account_number_last4 &lt;&gt; RIGHT(payouts.destination_account_masked, 4)))
+              AND (SELECT COUNT(*) FROM bank_accounts c
+                   JOIN bank_accounts r ON r.payee_id = c.payee_id
+                   WHERE r.bank_account_id = payouts.bank_account_id
+                     AND c.bank_bin = payouts.destination_bank_bin
+                     AND c.account_number_last4 = RIGHT(payouts.destination_account_masked, 4)) = 1;
+        </sql>
+    </changeSet>
+</databaseChangeLog>

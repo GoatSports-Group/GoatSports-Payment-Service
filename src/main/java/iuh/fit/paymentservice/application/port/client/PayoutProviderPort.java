@@ -7,4 +7,6 @@ public interface PayoutProviderPort {
     ProviderPayoutResult create(CreatePayoutCommand command);
 
     ProviderPayoutResult get(String providerPayoutId);
+
+    java.util.Optional<ProviderPayoutResult> findByReference(String referenceId);
 }
