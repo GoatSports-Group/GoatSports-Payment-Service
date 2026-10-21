@@ -25,18 +25,25 @@ import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import iuh.fit.paymentservice.domain.enums.PayoutStatus;
 import iuh.fit.paymentservice.domain.enums.SettlementStatus;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
+import java.time.Duration;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OwnerPayoutServiceImpl implements OwnerPayoutService {
+    static final Duration LOOKUP_AFTER = Duration.ofMinutes(1);
+    static final Duration GIVE_UP_AFTER = Duration.ofMinutes(10);
     static final double MINIMUM_WITHDRAWAL = 10_000D;
     private static final LocalDateTime EVER = LocalDateTime.of(9999, 12, 31, 0, 0);
     private static final EnumSet<PaymentStatus> COLLECTED = EnumSet.of(
@@ -155,8 +162,17 @@ public class OwnerPayoutServiceImpl implements OwnerPayoutService {
                     payout.getReferenceId(), payout.getIdempotencyKey(), amount, account.getBankBin(),
                     bankAccountProtector.decrypt(account.getAccountNumberEncrypted()), "GoatSports doanh thu"));
         } catch (PaymentApplicationException exception) {
-            // payOS từ chối rõ ràng: ghi lần rút thất bại, tiền trở lại số dư để rút lại sau.
-            result = new ProviderPayoutResult(null, null, PayoutStatus.FAILED, exception.getCode(), exception.getMessage());
+            if (PayoutFailureMessages.outcomeUnknown(exception.getCode())) {
+                // Không biết payOS đã nhận lệnh chưa (timeout, mất phản hồi). Coi là thất bại sẽ trả tiền về số dư trong khi
+                // tiền có thể đã chuyển, chủ sân rút lại là nhận hai lần. Giữ "đang chuyển"; reconcileUncertainWithdrawals
+                // hỏi payOS theo referenceId để chốt.
+                log.warn("Withdrawal payout {} outcome unknown ({}): {}", payout.getReferenceId(),
+                        exception.getCode(), exception.getMessage());
+                result = new ProviderPayoutResult(null, null, PayoutStatus.PENDING, null, null);
+            } else {
+                // payOS từ chối rõ ràng: ghi lần rút thất bại, tiền trở lại số dư để rút lại sau.
+                result = new ProviderPayoutResult(null, null, PayoutStatus.FAILED, exception.getCode(), exception.getMessage());
+            }
         }
         payout.setProviderPayoutId(result.providerPayoutId());
         applyProviderResult(payout, result);
@@ -193,6 +209,40 @@ public class OwnerPayoutServiceImpl implements OwnerPayoutService {
             settlement.setStatus(SettlementStatus.PROCESSING);
         }
         settlementRepository.save(settlement);
+    }
+
+    /**
+     * Lần rút gặp lỗi chưa rõ kết quả nằm ở payout PENDING chưa có providerPayoutId (luồng bình thường không bao giờ
+     * commit trạng thái này). Hỏi payOS theo referenceId: có lệnh thì ghi theo kết quả thật (PROCESSING thì
+     * reconcileProcessingPayouts theo tiếp); quá {@link #GIVE_UP_AFTER} mà payOS vẫn không có lệnh nào thì mới coi là
+     * thất bại và trả tiền về số dư. Không hỏi được payOS thì để lượt sau, không đoán.
+     */
+    @Scheduled(fixedDelayString = "${payment.payout.reconciliation-delay-ms:30000}", initialDelay = 30_000)
+    @Transactional
+    public void reconcileUncertainWithdrawals() {
+        LocalDateTime now = LocalDateTime.now();
+        for (Payout candidate : payoutRepository.findByStatuses(EnumSet.of(PayoutStatus.PENDING))) {
+            if (candidate.getSettlementId() == null || candidate.getProviderPayoutId() != null
+                    || candidate.getRequestedAt() == null || candidate.getRequestedAt().isAfter(now.minus(LOOKUP_AFTER))) {
+                continue;
+            }
+            Payout payout = payoutRepository.findByIdForUpdate(candidate.getPayoutId()).orElse(null);
+            if (payout == null || payout.getStatus() != PayoutStatus.PENDING || payout.getProviderPayoutId() != null) continue;
+            Optional<ProviderPayoutResult> found;
+            try {
+                found = payoutProviderPort.findByReference(payout.getReferenceId());
+            } catch (PaymentApplicationException exception) {
+                log.warn("Cannot look up withdrawal payout {} yet: {}", payout.getReferenceId(), exception.getMessage());
+                continue;
+            }
+            if (found.isPresent()) {
+                payout.setProviderPayoutId(found.get().providerPayoutId());
+                applyProviderResult(payout, found.get());
+            } else if (payout.getRequestedAt().isBefore(now.minus(GIVE_UP_AFTER))) {
+                applyProviderResult(payout, new ProviderPayoutResult(null, null, PayoutStatus.FAILED,
+                        "PAYOS_PAYOUT_TIMEOUT", "payOS không nhận được lệnh chuyển tiền (timeout)"));
+            }
+        }
     }
 
     /** Lý do đọc được cho chủ sân; lý do thô của payOS vẫn ở payout để đối soát. */

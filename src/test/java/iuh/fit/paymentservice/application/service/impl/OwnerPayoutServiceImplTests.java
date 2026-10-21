@@ -156,6 +156,100 @@ class OwnerPayoutServiceImplTests {
         assertThat(settlement.getStatus()).isEqualTo(SettlementStatus.FAILED);
     }
 
+    private Settlement[] withdrawalSetup(UUID settlementId, Payout[] payoutHolder) {
+        ledger(300_000, 300_000, 0, 0);
+        BankAccount account = BankAccount.builder().bankAccountId(UUID.randomUUID()).payeeId(owner).bankBin("970415")
+                .accountNumberEncrypted("enc").accountNumberLast4("6077").accountName("CHU SAN")
+                .status(BankAccountStatus.VERIFIED).isDefault(true).build();
+        when(bankAccountRepository.findDefaultByPayeeIdAndStatuses(eq(owner), anyCollection())).thenReturn(Optional.of(account));
+        Settlement[] stored = new Settlement[1];
+        when(settlementRepository.save(any())).thenAnswer(call -> {
+            Settlement settlement = call.getArgument(0);
+            if (settlement.getSettlementId() == null) settlement.setSettlementId(settlementId);
+            stored[0] = settlement;
+            return settlement;
+        });
+        when(settlementRepository.findByIdForUpdate(settlementId)).thenAnswer(call -> Optional.of(stored[0]));
+        when(payoutRepository.save(any())).thenAnswer(call -> {
+            payoutHolder[0] = call.getArgument(0);
+            return payoutHolder[0];
+        });
+        when(bankAccountProtector.decrypt("enc")).thenReturn("0123456077");
+        return stored;
+    }
+
+    /** Timeout khi gọi payOS: chưa biết tiền đã chuyển chưa, nên KHÔNG trả về số dư (chủ sân rút lại là nhận hai lần). */
+    @Test
+    void withdrawalWithUnknownOutcomeStaysProcessingInsteadOfReturningMoneyToBalance() {
+        UUID settlementId = UUID.randomUUID();
+        Payout[] payout = new Payout[1];
+        Settlement[] settlement = withdrawalSetup(settlementId, payout);
+        when(payoutProviderPort.create(any())).thenThrow(new iuh.fit.paymentservice.application.exception.PaymentProviderException(
+                "PAYOS_PAYOUT_ERROR", "payOS không thể xác minh hoặc tạo giao dịch hoàn tiền"));
+
+        var withdrawal = service.withdraw(owner, null);
+
+        assertThat(withdrawal.status()).isEqualTo(SettlementStatus.PROCESSING);
+        assertThat(settlement[0].getStatus()).isEqualTo(SettlementStatus.PROCESSING);
+        assertThat(payout[0].getStatus()).isEqualTo(PayoutStatus.PENDING);
+        assertThat(withdrawal.failureReason()).isNull();
+    }
+
+    /** payOS từ chối rõ ràng (sai số tài khoản): vẫn thất bại ngay, tiền về số dư như trước. */
+    @Test
+    void withdrawalRejectedByPayOsStillFailsImmediately() {
+        UUID settlementId = UUID.randomUUID();
+        Payout[] payout = new Payout[1];
+        Settlement[] settlement = withdrawalSetup(settlementId, payout);
+        when(payoutProviderPort.create(any())).thenThrow(new iuh.fit.paymentservice.application.exception.PaymentProviderException(
+                "PAYOS_PAYOUT_INVALID_TO_ACCOUNT_NUMBER", "Không tìm thấy tài khoản nhận chi"));
+
+        service.withdraw(owner, null);
+
+        assertThat(settlement[0].getStatus()).isEqualTo(SettlementStatus.FAILED);
+        assertThat(payout[0].getStatus()).isEqualTo(PayoutStatus.FAILED);
+    }
+
+    private Payout uncertainPayout(UUID settlementId, Settlement settlement, LocalDateTime requestedAt) {
+        Payout payout = Payout.builder().payoutId(UUID.randomUUID()).settlementId(settlementId)
+                .referenceId("settlement-" + settlementId).status(PayoutStatus.PENDING).requestedAt(requestedAt).build();
+        when(payoutRepository.findByStatuses(anyCollection())).thenReturn(java.util.List.of(payout));
+        when(payoutRepository.findByIdForUpdate(payout.getPayoutId())).thenReturn(Optional.of(payout));
+        when(settlementRepository.findByIdForUpdate(settlementId)).thenReturn(Optional.of(settlement));
+        return payout;
+    }
+
+    @Test
+    void reconciliationRecordsTheTransferPayOsActuallyMade() {
+        UUID settlementId = UUID.randomUUID();
+        Settlement settlement = Settlement.builder().settlementId(settlementId).status(SettlementStatus.PROCESSING).build();
+        Payout payout = uncertainPayout(settlementId, settlement, LocalDateTime.now().minusMinutes(3));
+        when(payoutProviderPort.findByReference("settlement-" + settlementId)).thenReturn(Optional.of(
+                new ProviderPayoutResult("po-9", "CHU SAN", PayoutStatus.SUCCEEDED, null, null)));
+
+        service.reconcileUncertainWithdrawals();
+
+        assertThat(settlement.getStatus()).isEqualTo(SettlementStatus.PAID);
+        assertThat(payout.getProviderPayoutId()).isEqualTo("po-9");
+        assertThat(payout.getStatus()).isEqualTo(PayoutStatus.SUCCEEDED);
+    }
+
+    @Test
+    void reconciliationOnlyGivesUpAfterPayOsNeverReceivedTheTransfer() {
+        UUID settlementId = UUID.randomUUID();
+        Settlement settlement = Settlement.builder().settlementId(settlementId).status(SettlementStatus.PROCESSING).build();
+        Payout payout = uncertainPayout(settlementId, settlement, LocalDateTime.now().minusMinutes(3));
+        when(payoutProviderPort.findByReference("settlement-" + settlementId)).thenReturn(Optional.empty());
+
+        service.reconcileUncertainWithdrawals();
+        assertThat(settlement.getStatus()).isEqualTo(SettlementStatus.PROCESSING); // mới 3 phút: chờ tiếp
+
+        payout.setRequestedAt(LocalDateTime.now().minusMinutes(11));
+        service.reconcileUncertainWithdrawals();
+        assertThat(settlement.getStatus()).isEqualTo(SettlementStatus.FAILED); // quá 10 phút payOS vẫn không có lệnh
+        assertThat(payout.getFailureCode()).isEqualTo("PAYOS_PAYOUT_TIMEOUT");
+    }
+
     @Test
     void withdrawRefusesAmountAboveAvailableOrBelowMinimumWithoutCallingPayOs() {
         ledger(500_000, 300_000, 0, 0);

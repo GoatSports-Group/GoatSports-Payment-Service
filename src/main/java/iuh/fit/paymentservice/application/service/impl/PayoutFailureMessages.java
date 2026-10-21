@@ -27,6 +27,17 @@ public final class PayoutFailureMessages {
     private PayoutFailureMessages() {
     }
 
+    /**
+     * Lỗi khi gọi payOS mà không biết lệnh chuyển tiền đã tới payOS hay chưa: mất kết nối/timeout (adapter gói thành
+     * PAYOS_PAYOUT_ERROR), phản hồi hỏng, HTTP 408/5xx. Khác với payOS trả mã từ chối rõ ràng (chắc chắn chưa chuyển):
+     * với lỗi này phải hỏi lại payOS theo referenceId trước khi coi là thất bại, nếu không có thể chi hai lần.
+     */
+    public static boolean outcomeUnknown(String code) {
+        if (code == null) return false;
+        return code.equals("PAYOS_PAYOUT_ERROR") || code.equals("PAYOS_PAYOUT_INVALID_RESPONSE")
+                || code.matches("PAYOS_PAYOUT_(408|5\\d\\d)");
+    }
+
     public static Kind classify(String code, String reason) {
         String text = ((code == null ? "" : code) + " " + (reason == null ? "" : reason)).toLowerCase(Locale.ROOT);
         if (DESTINATION_HINTS.stream().anyMatch(text::contains)) return Kind.DESTINATION;
