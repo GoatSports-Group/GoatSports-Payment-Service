@@ -8,6 +8,8 @@ import iuh.fit.paymentservice.application.service.PaymentDomainEventService;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
+import iuh.fit.paymentservice.domain.enums.PaymentMethod;
+import iuh.fit.paymentservice.domain.enums.PaymentProvider;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -105,7 +108,7 @@ class PaymentReconciliationServiceImplTests {
         TestData data = data(LocalDateTime.now().plusMinutes(5));
         when(paymentAttemptRepository.findLatestByPaymentIdAndStatuses(
                 data.payment().getPaymentId(),
-                java.util.EnumSet.of(PaymentAttemptStatus.REDIRECT_READY, PaymentAttemptStatus.PENDING)
+                EnumSet.of(PaymentAttemptStatus.REDIRECT_READY, PaymentAttemptStatus.PENDING)
         )).thenReturn(Optional.of(data.attempt()));
         when(paymentStatusProviderPort.cancel(data.paymentLinkId(), "Người dùng hủy"))
                 .thenReturn(result(
@@ -127,7 +130,7 @@ class PaymentReconciliationServiceImplTests {
         TestData data = data(LocalDateTime.now().plusMinutes(5));
         when(paymentAttemptRepository.findLatestByPaymentIdAndStatuses(
                 data.payment().getPaymentId(),
-                java.util.EnumSet.of(PaymentAttemptStatus.REDIRECT_READY, PaymentAttemptStatus.PENDING)
+                EnumSet.of(PaymentAttemptStatus.REDIRECT_READY, PaymentAttemptStatus.PENDING)
         )).thenReturn(Optional.of(data.attempt()));
         when(paymentStatusProviderPort.cancel(data.paymentLinkId(), "Người dùng hủy"))
                 .thenReturn(result(
@@ -148,8 +151,8 @@ class PaymentReconciliationServiceImplTests {
                 .attemptId(attemptId)
                 .paymentId(paymentId)
                 .providerTransactionId(paymentLinkId)
-                .provider(iuh.fit.paymentservice.domain.enums.PaymentProvider.PAYOS)
-                .method(iuh.fit.paymentservice.domain.enums.PaymentMethod.BANK_TRANSFER)
+                .provider(PaymentProvider.PAYOS)
+                .method(PaymentMethod.BANK_TRANSFER)
                 .status(PaymentAttemptStatus.PENDING)
                 .build();
         Payment payment = Payment.builder()

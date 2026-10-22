@@ -2,6 +2,7 @@ package iuh.fit.paymentservice.domain.entity;
 
 import iuh.fit.paymentservice.domain.enums.RefundStatus;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -27,7 +28,7 @@ public class Refund extends BaseEntity {
     private RefundStatus status;
     private String failureReason;
     private LocalDateTime refundedAt;
-    @lombok.Builder.Default
+    @Builder.Default
     private Integer retryCount = 0;
     private LocalDateTime lastRemindedAt;
 }

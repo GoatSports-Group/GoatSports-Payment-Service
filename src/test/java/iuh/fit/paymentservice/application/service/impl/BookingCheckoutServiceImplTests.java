@@ -4,6 +4,7 @@ import iuh.fit.paymentservice.application.dto.request.attempt.CreatePaymentAttem
 import iuh.fit.paymentservice.application.dto.request.payment.CreateBookingCheckoutCommand;
 import iuh.fit.paymentservice.application.dto.response.attempt.CreatePaymentAttemptResult;
 import iuh.fit.paymentservice.application.dto.response.attempt.PaymentAttemptResponseCommand;
+import iuh.fit.paymentservice.application.dto.response.payment.BookingCheckoutResult;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.service.BookingRemainingPaymentRetryService;
 import iuh.fit.paymentservice.application.service.PaymentAttemptService;
@@ -62,7 +63,7 @@ class BookingCheckoutServiceImplTests {
                 paymentService, paymentAttemptService, paymentRepository, retryService
         );
 
-        var result = service.create(new CreateBookingCheckoutCommand(
+        BookingCheckoutResult result = service.create(new CreateBookingCheckoutCommand(
                 payerId, bookingId, 70_000D, "VND", "vn", "203.0.113.10", expiresAt
         ));
 

@@ -26,20 +26,25 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.context.annotation.Import;
 
+import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Modifier;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 
@@ -323,7 +328,7 @@ class PaymentServiceApplicationTests {
         ExecutorService executor = Executors.newFixedThreadPool(2);
 
         try {
-            java.util.concurrent.Callable<TestHttpResponse> createPayment = () -> {
+            Callable<TestHttpResponse> createPayment = () -> {
                 callersReady.countDown();
                 if (!start.await(10, TimeUnit.SECONDS)) {
                     throw new IllegalStateException("Concurrent payment callers did not start in time");
@@ -426,7 +431,7 @@ class PaymentServiceApplicationTests {
         UUID paymentId = extractPaymentId(paymentResponse.body());
 
         Map<String, String> headers = gatewayHeaders(payerUserId, null);
-        headers = new java.util.LinkedHashMap<>(headers);
+        headers = new LinkedHashMap<>(headers);
         headers.put("X-Forwarded-For", "203.0.113.10");
         String attemptBody = """
                 {
@@ -666,7 +671,7 @@ class PaymentServiceApplicationTests {
     }
 
     private Map<String, String> gatewayHeaders(UUID userId, String idempotencyKey) {
-        var headers = new java.util.LinkedHashMap<String, String>();
+        LinkedHashMap<String, String> headers = new LinkedHashMap<String, String>();
         headers.put("X-Gateway-Secret", GATEWAY_SECRET);
         headers.put("X-User-Id", userId.toString());
         if (idempotencyKey != null) {
@@ -694,7 +699,7 @@ class PaymentServiceApplicationTests {
     }
 
     private UUID extractPaymentId(String body) {
-        var matcher = PAYMENT_ID_PATTERN.matcher(body);
+        Matcher matcher = PAYMENT_ID_PATTERN.matcher(body);
         assertThat(matcher.find()).as("payment id is present in response").isTrue();
         return UUID.fromString(matcher.group(1));
     }
@@ -708,8 +713,8 @@ class PaymentServiceApplicationTests {
                 .filter(field -> !field.isSynthetic())
                 .filter(field -> !Modifier.isStatic(field.getModifiers()))
                 .collect(Collectors.toMap(
-                        java.lang.reflect.Field::getName,
-                        java.lang.reflect.Field::getType
+                        Field::getName,
+                        Field::getType
                 ));
     }
 
@@ -732,7 +737,7 @@ class PaymentServiceApplicationTests {
         }
 
         int status = connection.getResponseCode();
-        var stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+        InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
         String responseBody = stream == null
                 ? ""
                 : new String(stream.readAllBytes(), StandardCharsets.UTF_8);

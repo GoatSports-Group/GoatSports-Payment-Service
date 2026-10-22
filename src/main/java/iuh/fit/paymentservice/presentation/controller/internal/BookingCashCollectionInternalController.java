@@ -1,6 +1,7 @@
 package iuh.fit.paymentservice.presentation.controller.internal;
 
 import iuh.fit.paymentservice.application.dto.request.payment.CollectBookingCashCommand;
+import iuh.fit.paymentservice.application.dto.response.payment.PaymentResponseCommand;
 import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.port.security.CurrentUserProvider;
 import iuh.fit.paymentservice.application.service.BookingCashCollectionService;
@@ -28,7 +29,7 @@ public class BookingCashCollectionInternalController {
 
     @PostMapping("/booking-cash-collections")
     public ResponseEntity<PaymentResponse> collect(@Valid @RequestBody CollectBookingCashRequest request) {
-        var payment = bookingCashCollectionService.collect(new CollectBookingCashCommand(
+        PaymentResponseCommand payment = bookingCashCollectionService.collect(new CollectBookingCashCommand(
                 request.getPayerId(), request.getBookingId(), request.getAmount(),
                 request.getCurrency(), authenticatedCollectorId()
         ));

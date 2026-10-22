@@ -12,6 +12,7 @@ import iuh.fit.paymentservice.application.port.persistence.RefundRepository;
 import iuh.fit.paymentservice.application.service.RefundTransactionService;
 import iuh.fit.paymentservice.application.service.PaymentDomainEventService;
 import iuh.fit.paymentservice.domain.entity.Payment;
+import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.entity.Refund;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
 import iuh.fit.paymentservice.domain.enums.PaymentMethod;
@@ -77,7 +78,7 @@ public class RefundTransactionServiceImpl implements RefundTransactionService {
         ensurePaymentRefundable(payment);
         ensureRefundAmountAvailable(payment, command.getAmount());
 
-        var successfulAttempt = paymentAttemptRepository
+        PaymentAttempt successfulAttempt = paymentAttemptRepository
                 .findLatestByPaymentIdAndStatuses(payment.getPaymentId(), SUCCEEDED_ATTEMPT_STATUS)
                 .orElseThrow(() -> new PaymentConflictException(
                         "SUCCESSFUL_PAYMENT_ATTEMPT_NOT_FOUND",

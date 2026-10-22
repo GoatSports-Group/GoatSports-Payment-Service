@@ -9,6 +9,7 @@ import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.port.persistence.PayoutRepository;
 import iuh.fit.paymentservice.application.port.persistence.RefundRepository;
 import iuh.fit.paymentservice.application.port.security.BankAccountProtector;
+import iuh.fit.paymentservice.application.service.OwnerPayoutService;
 import iuh.fit.paymentservice.application.service.PaymentDomainEventService;
 import iuh.fit.paymentservice.domain.entity.BankAccount;
 import iuh.fit.paymentservice.domain.entity.Payment;
@@ -20,11 +21,14 @@ import iuh.fit.paymentservice.domain.enums.PayoutStatus;
 import iuh.fit.paymentservice.domain.enums.RefundStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -53,13 +57,13 @@ class RefundDisbursementServiceImplTests {
     @Mock
     private PaymentDomainEventService paymentDomainEventService;
     @Mock
-    private iuh.fit.paymentservice.application.service.OwnerPayoutService ownerPayoutService;
+    private OwnerPayoutService ownerPayoutService;
     @InjectMocks
     private RefundDisbursementServiceImpl service;
 
     @Test
     void autoRetryWaitsLongerAfterEachAttemptAndStopsAtTheCap() {
-        java.time.LocalDateTime now = java.time.LocalDateTime.of(2026, 9, 27, 12, 0);
+        LocalDateTime now = LocalDateTime.of(2026, 9, 27, 12, 0);
         Refund fresh = Refund.builder().refundId(UUID.randomUUID()).status(RefundStatus.FAILED)
                 .retryCount(0).updatedAt(now.minusMinutes(6)).build();
         Refund tooSoon = Refund.builder().refundId(UUID.randomUUID()).status(RefundStatus.FAILED)
@@ -68,7 +72,7 @@ class RefundDisbursementServiceImplTests {
                 .retryCount(2).updatedAt(now.minusMinutes(25)).build();
         Refund exhausted = Refund.builder().refundId(UUID.randomUUID()).status(RefundStatus.FAILED)
                 .retryCount(RefundDisbursementServiceImpl.MAX_AUTO_RETRIES).updatedAt(now.minusDays(2)).build();
-        when(refundRepository.findReconciliationCandidates(anyCollection(), any(), org.mockito.ArgumentMatchers.anyInt()))
+        when(refundRepository.findReconciliationCandidates(anyCollection(), any(), ArgumentMatchers.anyInt()))
                 .thenReturn(List.of(fresh, tooSoon, due, exhausted));
 
         assertThat(service.findRetryableRefundIds(now)).containsExactly(fresh.getRefundId(), due.getRefundId());
@@ -232,7 +236,7 @@ class RefundDisbursementServiceImplTests {
 
         Refund result = service.claim(refundId, payerId);
 
-        verify(payoutProviderPort, org.mockito.Mockito.never()).create(any());
+        verify(payoutProviderPort, Mockito.never()).create(any());
         assertThat(result.getStatus()).isEqualTo(RefundStatus.SUCCEEDED);
         assertThat(failedPayout.getStatus()).isEqualTo(PayoutStatus.SUCCEEDED);
         assertThat(failedPayout.getProviderPayoutId()).isEqualTo("payos-payout-1");

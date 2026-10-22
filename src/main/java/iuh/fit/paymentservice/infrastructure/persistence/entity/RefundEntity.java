@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -56,7 +57,7 @@ public class RefundEntity extends BaseEntity {
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
     @Column(name = "retry_count", nullable = false)
-    @lombok.Builder.Default
+    @Builder.Default
     private Integer retryCount = 0;
     @Column(name = "refunded_at")
     private LocalDateTime refundedAt;

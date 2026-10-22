@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -56,10 +57,10 @@ class PaymentServiceQueryTests {
                         .providerTransactionId("payos-transaction-123")
                         .build()));
 
-        var service = new PaymentServiceImpl(
+        PaymentServiceImpl service = new PaymentServiceImpl(
                 paymentRepository, paymentAttemptRepository, paymentMapper, paymentCreationTransactionService
         );
-        var result = service.getPaymentsByReferences(
+        List<PaymentResponseCommand> result = service.getPaymentsByReferences(
                 PaymentReferenceType.BOOKING, Set.of(bookingId)
         );
 
@@ -81,11 +82,11 @@ class PaymentServiceQueryTests {
         PaymentAttempt attempt = PaymentAttempt.builder()
                 .paymentId(paymentId).failureCode("PAYMENT_EXPIRED")
                 .failureReason("Đã hết thời gian giữ chỗ thanh toán").build();
-        when(paymentRepository.findById(paymentId)).thenReturn(java.util.Optional.of(payment));
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
         when(paymentMapper.toPaymentResponseCommand(payment)).thenReturn(response);
         when(paymentAttemptRepository.findLatestByPaymentIds(List.of(paymentId)))
                 .thenReturn(List.of(attempt));
-        var service = new PaymentServiceImpl(
+        PaymentServiceImpl service = new PaymentServiceImpl(
                 paymentRepository, paymentAttemptRepository, paymentMapper, paymentCreationTransactionService
         );
 
@@ -97,7 +98,7 @@ class PaymentServiceQueryTests {
 
     @Test
     void rejectsEmptyInternalReferenceQuery() {
-        var service = new PaymentServiceImpl(
+        PaymentServiceImpl service = new PaymentServiceImpl(
                 paymentRepository, paymentAttemptRepository, paymentMapper, paymentCreationTransactionService
         );
 

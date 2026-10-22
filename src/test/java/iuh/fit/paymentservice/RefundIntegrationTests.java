@@ -13,6 +13,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -22,6 +24,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -189,7 +192,7 @@ class RefundIntegrationTests {
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            java.util.concurrent.Callable<TestHttpResponse> caller = () -> {
+            Callable<TestHttpResponse> caller = () -> {
                 ready.countDown();
                 if (!start.await(10, TimeUnit.SECONDS)) {
                     throw new IllegalStateException("Refund callers did not start in time");
@@ -272,8 +275,8 @@ class RefundIntegrationTests {
         return Arrays.stream(type.getDeclaredFields())
                 .filter(field -> !field.isSynthetic())
                 .filter(field -> !Modifier.isStatic(field.getModifiers()))
-                .collect(Collectors.toMap(java.lang.reflect.Field::getName,
-                        java.lang.reflect.Field::getType));
+                .collect(Collectors.toMap(Field::getName,
+                        Field::getType));
     }
 
     private TestHttpResponse request(String method, String path, Map<String, String> headers, String body)
@@ -288,7 +291,7 @@ class RefundIntegrationTests {
             connection.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
         }
         int status = connection.getResponseCode();
-        var stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+        InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
         String responseBody = stream == null ? "" : new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         connection.disconnect();
         return new TestHttpResponse(status, responseBody);

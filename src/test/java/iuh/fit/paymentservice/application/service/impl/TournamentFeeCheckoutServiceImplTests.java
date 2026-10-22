@@ -2,6 +2,7 @@ package iuh.fit.paymentservice.application.service.impl;
 
 import iuh.fit.paymentservice.application.dto.response.attempt.CreatePaymentAttemptResult;
 import iuh.fit.paymentservice.application.dto.response.attempt.PaymentAttemptResponseCommand;
+import iuh.fit.paymentservice.application.dto.response.payment.BookingCheckoutResult;
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
 import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.service.BookingRemainingPaymentRetryService;
@@ -63,7 +64,7 @@ class TournamentFeeCheckoutServiceImplTests {
                         .checkoutUrl("https://pay.payos.vn/web/t").qrCodeContent("qr").build(), false));
         when(paymentRepository.findById(payment.getPaymentId())).thenReturn(Optional.of(prepared));
 
-        var result = service().create(new Command(payerId, registrationId, 150_000D, "Lệ phí", "vn", null, deadline));
+        BookingCheckoutResult result = service().create(new Command(payerId, registrationId, 150_000D, "Lệ phí", "vn", null, deadline));
 
         assertThat(result.checkoutUrl()).isEqualTo("https://pay.payos.vn/web/t");
         assertThat(result.expiresAt()).isEqualTo(deadline);

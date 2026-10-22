@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -60,7 +61,7 @@ class AccountDataServiceImplTests {
         verify(bankAccountRepository).save(account);
 
         // Kafka giao lại cùng sự kiện: không ghi thêm lần nữa.
-        org.mockito.Mockito.clearInvocations(bankAccountRepository);
+        Mockito.clearInvocations(bankAccountRepository);
         service.eraseUserData(userId);
         verify(bankAccountRepository, never()).save(any());
     }

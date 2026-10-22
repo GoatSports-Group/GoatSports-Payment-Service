@@ -6,6 +6,7 @@ import iuh.fit.paymentservice.application.exception.InvalidPaymentException;
 import iuh.fit.paymentservice.application.port.security.CurrentUserProvider;
 import iuh.fit.paymentservice.application.service.PaymentService;
 import iuh.fit.paymentservice.application.service.PaymentReconciliationService;
+import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
 import iuh.fit.paymentservice.presentation.converter.PaymentConverter;
 import iuh.fit.paymentservice.presentation.request.CreatePaymentRequest;
 import iuh.fit.paymentservice.presentation.response.PaymentResponse;
@@ -40,7 +41,7 @@ public class PaymentController {
         UUID payerUserId = authenticatedUserId();
         // Le phi giai dau do club-service tinh va khoi tao (/internal/payments/tournament-fee-checkouts);
         // cho client tu gui so tien la de nguoi choi tu dat muc phi cho minh.
-        if (request.getPurpose() == iuh.fit.paymentservice.domain.enums.PaymentPurpose.TOURNAMENT_FEE) {
+        if (request.getPurpose() == PaymentPurpose.TOURNAMENT_FEE) {
             throw new InvalidPaymentException("SERVER_PRICED_PAYMENT",
                     "Lệ phí giải đấu chỉ được khởi tạo từ trang giải đấu");
         }

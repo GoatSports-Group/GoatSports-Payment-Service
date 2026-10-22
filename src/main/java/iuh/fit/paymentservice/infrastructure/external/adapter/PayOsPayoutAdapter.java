@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import vn.payos.exception.APIException;
 import vn.payos.model.v1.payouts.GetPayoutListParams;
+import vn.payos.model.v1.payouts.Payout;
 import vn.payos.model.v1.payouts.PayoutApprovalState;
 import vn.payos.model.v1.payouts.PayoutTransaction;
 import vn.payos.model.v1.payouts.PayoutTransactionState;
@@ -78,7 +79,7 @@ public class PayOsPayoutAdapter implements PayoutProviderPort {
     @Override
     public Optional<ProviderPayoutResult> findByReference(String referenceId) {
         try {
-            List<vn.payos.model.v1.payouts.Payout> items = clientProvider.get().payouts()
+            List<Payout> items = clientProvider.get().payouts()
                     .list(GetPayoutListParams.builder().referenceId(referenceId).limit(1).build())
                     .getItems();
             return items == null || items.isEmpty() ? Optional.empty() : Optional.of(map(items.getFirst()));
@@ -108,7 +109,7 @@ public class PayOsPayoutAdapter implements PayoutProviderPort {
         return new PaymentProviderException("PAYOS_PAYOUT_" + normalizedCode, description, exception);
     }
 
-    private ProviderPayoutResult map(vn.payos.model.v1.payouts.Payout payout) {
+    private ProviderPayoutResult map(Payout payout) {
         if (payout == null || payout.getId() == null || payout.getTransactions() == null
                 || payout.getTransactions().isEmpty()) {
             throw new PaymentProviderException("PAYOS_PAYOUT_INVALID_RESPONSE", "Phản hồi payout payOS không hợp lệ");

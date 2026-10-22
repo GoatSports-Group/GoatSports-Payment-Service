@@ -20,6 +20,7 @@ import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.ZoneId;
@@ -129,7 +130,7 @@ public class PayOsCheckoutAdapter implements PaymentCheckoutPort {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             ImageIO.write(image, "PNG", output);
             return "data:image/png;base64," + Base64.getEncoder().encodeToString(output.toByteArray());
-        } catch (WriterException | java.io.IOException exception) {
+        } catch (WriterException | IOException exception) {
             throw new PaymentProviderException(
                     "PAYOS_QR_RENDER_ERROR",
                     "Không thể render mã QR payOS",

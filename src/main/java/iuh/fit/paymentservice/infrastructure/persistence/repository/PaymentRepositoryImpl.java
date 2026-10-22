@@ -4,11 +4,14 @@ import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.domain.entity.Payment;
 import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
 import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
+import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import iuh.fit.paymentservice.infrastructure.persistence.mapper.PaymentEntityMapper;
 import iuh.fit.paymentservice.infrastructure.persistence.repository.jpa.JpaPaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -28,14 +31,14 @@ public class PaymentRepositoryImpl implements PaymentRepository {
     }
 
     @Override
-    public double sumPayeeAmount(UUID payeeId, java.util.Collection<iuh.fit.paymentservice.domain.enums.PaymentStatus> statuses,
-                                 java.time.LocalDateTime paidBefore) {
+    public double sumPayeeAmount(UUID payeeId, Collection<PaymentStatus> statuses,
+                                 LocalDateTime paidBefore) {
         return jpaPaymentRepository.sumPayeeAmount(payeeId, statuses, paidBefore);
     }
 
     @Override
     public List<Payment> findRecentByPayee(UUID payeeId,
-                                           java.util.Collection<iuh.fit.paymentservice.domain.enums.PaymentStatus> statuses) {
+                                           Collection<PaymentStatus> statuses) {
         return jpaPaymentRepository.findTop200ByPayeeIdAndStatusInOrderByPaidAtDesc(payeeId, statuses).stream()
                 .map(paymentEntityMapper::toDomain)
                 .toList();

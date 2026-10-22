@@ -12,11 +12,16 @@ import iuh.fit.paymentservice.application.port.persistence.PaymentRepository;
 import iuh.fit.paymentservice.application.service.CashCollectionService;
 import iuh.fit.paymentservice.application.service.PaymentService;
 import iuh.fit.paymentservice.domain.entity.Payment;
+import iuh.fit.paymentservice.domain.enums.PaymentPurpose;
+import iuh.fit.paymentservice.domain.enums.PaymentReferenceType;
 import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
@@ -45,17 +50,17 @@ class BookingCashCollectionServiceImplTests {
         Payment payment = Payment.builder().paymentId(paymentId).status(PaymentStatus.SUCCEEDED).build();
         PaymentResponseCommand succeeded = PaymentResponseCommand.builder()
                 .paymentId(paymentId).status(PaymentStatus.SUCCEEDED).build();
-        when(paymentService.createPayment(org.mockito.ArgumentMatchers.any()))
+        when(paymentService.createPayment(ArgumentMatchers.any()))
                 .thenReturn(new CreatePaymentResult(created, false));
-        when(cashCollectionService.collect(org.mockito.ArgumentMatchers.any()))
+        when(cashCollectionService.collect(ArgumentMatchers.any()))
                 .thenReturn(new CreatePaymentAttemptResult(null, false));
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
         when(paymentMapper.toPaymentResponseCommand(payment)).thenReturn(succeeded);
 
-        var service = new BookingCashCollectionServiceImpl(
+        BookingCashCollectionServiceImpl service = new BookingCashCollectionServiceImpl(
                 paymentService, cashCollectionService, paymentRepository, paymentMapper, retryService
         );
-        var result = service.collect(new CollectBookingCashCommand(
+        PaymentResponseCommand result = service.collect(new CollectBookingCashCommand(
                 payerId, bookingId, 140_000.0, "VND", collectorId
         ));
 
@@ -76,10 +81,10 @@ class BookingCashCollectionServiceImplTests {
         Payment cancelled = Payment.builder().paymentId(paymentId).payerId(payerId).amount(140_000.0)
                 .currency("VND").status(PaymentStatus.CANCELLED).build();
         when(paymentRepository.findByReference(
-                iuh.fit.paymentservice.domain.enums.PaymentReferenceType.BOOKING, bookingId,
-                iuh.fit.paymentservice.domain.enums.PaymentPurpose.BOOKING_REMAINING
+                PaymentReferenceType.BOOKING, bookingId,
+                PaymentPurpose.BOOKING_REMAINING
         )).thenReturn(Optional.of(cancelled));
-        when(cashCollectionService.collect(org.mockito.ArgumentMatchers.any()))
+        when(cashCollectionService.collect(ArgumentMatchers.any()))
                 .thenReturn(new CreatePaymentAttemptResult(null, false));
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(cancelled));
         when(paymentMapper.toPaymentResponseCommand(cancelled)).thenReturn(PaymentResponseCommand.builder()
@@ -89,8 +94,8 @@ class BookingCashCollectionServiceImplTests {
                 .collect(new CollectBookingCashCommand(payerId, bookingId, 140_000.0, "VND", UUID.randomUUID()));
 
         // Ma payOS da huy: mo lai payment truoc (giong luc tao lai ma), roi moi ghi nhan tien mat.
-        var order = org.mockito.Mockito.inOrder(retryService, cashCollectionService);
+        InOrder order = Mockito.inOrder(retryService, cashCollectionService);
         order.verify(retryService).prepare(paymentId, null);
-        order.verify(cashCollectionService).collect(org.mockito.ArgumentMatchers.any());
+        order.verify(cashCollectionService).collect(ArgumentMatchers.any());
     }
 }

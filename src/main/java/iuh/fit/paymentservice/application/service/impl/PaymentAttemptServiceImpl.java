@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -51,7 +52,7 @@ public class PaymentAttemptServiceImpl implements PaymentAttemptService {
                 .orElseThrow(() -> new PaymentNotFoundException(command.getPaymentId()));
         ensurePaymentPayable(payment, command, now);
 
-        var activeAttempt = paymentAttemptRepository.findLatestByPaymentIdAndStatuses(
+        Optional<PaymentAttempt> activeAttempt = paymentAttemptRepository.findLatestByPaymentIdAndStatuses(
                 payment.getPaymentId(), ACTIVE_ATTEMPT_STATUSES
         );
         if (activeAttempt.isPresent()) {

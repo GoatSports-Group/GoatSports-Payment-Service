@@ -18,6 +18,7 @@ import iuh.fit.paymentservice.domain.enums.WebhookProcessingStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -86,7 +87,7 @@ class PayOsWebhookServiceImplTests {
         assertThat(payment.getPaidAt()).isNotNull();
         verify(eventService).recordPaymentResult(payment, attempt, payerId);
         ArgumentCaptor<ProviderWebhookEvent> eventCaptor = ArgumentCaptor.forClass(ProviderWebhookEvent.class);
-        verify(eventRepository, org.mockito.Mockito.atLeast(2)).save(eventCaptor.capture());
+        verify(eventRepository, Mockito.atLeast(2)).save(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getStatus()).isEqualTo(WebhookProcessingStatus.PROCESSED);
     }
 
@@ -125,7 +126,7 @@ class PayOsWebhookServiceImplTests {
         service.process(command);
 
         ArgumentCaptor<ProviderWebhookEvent> eventCaptor = ArgumentCaptor.forClass(ProviderWebhookEvent.class);
-        verify(eventRepository, org.mockito.Mockito.atLeast(2)).save(eventCaptor.capture());
+        verify(eventRepository, Mockito.atLeast(2)).save(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getStatus()).isEqualTo(WebhookProcessingStatus.IGNORED);
         verify(paymentRepository, never()).save(any());
         verify(eventService, never()).recordPaymentResult(any(), any(), any());

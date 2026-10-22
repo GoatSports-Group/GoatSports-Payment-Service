@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -99,7 +100,7 @@ class BookingCashCollectionIntegrationTests {
         connection.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
 
         int status = connection.getResponseCode();
-        var stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+        InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
         String responseBody = stream == null
                 ? ""
                 : new String(stream.readAllBytes(), StandardCharsets.UTF_8);

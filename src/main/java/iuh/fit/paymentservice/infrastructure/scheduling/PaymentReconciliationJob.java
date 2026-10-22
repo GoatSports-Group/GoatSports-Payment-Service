@@ -2,6 +2,7 @@ package iuh.fit.paymentservice.infrastructure.scheduling;
 
 import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;
 import iuh.fit.paymentservice.application.service.PaymentReconciliationService;
+import iuh.fit.paymentservice.domain.entity.PaymentAttempt;
 import iuh.fit.paymentservice.domain.enums.PaymentAttemptStatus;
 import iuh.fit.paymentservice.domain.enums.PaymentProvider;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -39,13 +41,13 @@ public class PaymentReconciliationJob {
 
     @Scheduled(fixedDelayString = "${payment.reconciliation.delay-ms}")
     public void reconcilePendingPayments() {
-        var candidates = paymentAttemptRepository.findReconciliationCandidates(
+        List<PaymentAttempt> candidates = paymentAttemptRepository.findReconciliationCandidates(
                 PaymentProvider.PAYOS,
                 ACTIVE_STATUSES,
                 LocalDateTime.now().minusSeconds(Math.max(0, staleAfterSeconds)),
                 Math.max(1, batchSize)
         );
-        for (var candidate : candidates) {
+        for (PaymentAttempt candidate : candidates) {
             try {
                 paymentReconciliationService.reconcile(candidate.getAttemptId());
             } catch (RuntimeException exception) {

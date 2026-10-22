@@ -2,6 +2,7 @@ package iuh.fit.paymentservice.application.service.impl;
 
 import iuh.fit.paymentservice.application.dto.response.payout.ProviderPayoutResult;
 import iuh.fit.paymentservice.application.exception.PaymentConflictException;
+import iuh.fit.paymentservice.application.exception.PaymentProviderException;
 import iuh.fit.paymentservice.application.port.client.PayoutProviderPort;
 import iuh.fit.paymentservice.application.port.persistence.BankAccountRepository;
 import iuh.fit.paymentservice.application.port.persistence.PaymentAttemptRepository;
@@ -18,6 +19,7 @@ import iuh.fit.paymentservice.domain.entity.Payout;
 import iuh.fit.paymentservice.domain.entity.Settlement;
 import iuh.fit.paymentservice.domain.enums.BankAccountStatus;
 import iuh.fit.paymentservice.domain.enums.PaymentProvider;
+import iuh.fit.paymentservice.domain.enums.PaymentStatus;
 import iuh.fit.paymentservice.domain.enums.PayoutStatus;
 import iuh.fit.paymentservice.domain.enums.SettlementStatus;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -64,7 +67,7 @@ class OwnerPayoutServiceImplTests {
     void balanceSubtractsRefundsAndWithdrawalsAndHoldsFreshMoney() {
         ledger(500_000, 300_000, 50_000, 100_000);
 
-        var balance = service.getBalance(owner);
+        OwnerPayoutService.Balance balance = service.getBalance(owner);
 
         assertThat(balance.onHold()).isEqualTo(200_000);
         assertThat(balance.available()).isEqualTo(150_000);
@@ -73,14 +76,14 @@ class OwnerPayoutServiceImplTests {
     @Test
     void earningsListPayeeShareAndFlagMoneyStillOnHold() {
         Payment fresh = Payment.builder().paymentId(UUID.randomUUID()).payeeAmount(90_000.0)
-                .status(iuh.fit.paymentservice.domain.enums.PaymentStatus.SUCCEEDED)
+                .status(PaymentStatus.SUCCEEDED)
                 .paidAt(LocalDateTime.now().minusDays(1)).build();
         Payment matured = Payment.builder().paymentId(UUID.randomUUID()).payeeAmount(60_000.0)
-                .status(iuh.fit.paymentservice.domain.enums.PaymentStatus.PARTIALLY_REFUNDED)
+                .status(PaymentStatus.PARTIALLY_REFUNDED)
                 .paidAt(LocalDateTime.now().minusDays(10)).build();
-        when(paymentRepository.findRecentByPayee(eq(owner), anyCollection())).thenReturn(java.util.List.of(fresh, matured));
+        when(paymentRepository.findRecentByPayee(eq(owner), anyCollection())).thenReturn(List.of(fresh, matured));
 
-        var earnings = service.getEarnings(owner);
+        List<OwnerPayoutService.Earning> earnings = service.getEarnings(owner);
 
         // Moc giu tien mac dinh 3 ngay giong getBalance(): khoan 1 ngay truoc con dang giu, khoan 10 ngay truoc da rut duoc.
         assertThat(earnings).extracting(OwnerPayoutService.Earning::amount).containsExactly(90_000.0, 60_000.0);
@@ -115,7 +118,7 @@ class OwnerPayoutServiceImplTests {
         when(payoutProviderPort.create(any())).thenReturn(
                 new ProviderPayoutResult("po-1", "CHU SAN", PayoutStatus.SUCCEEDED, null, null));
 
-        var withdrawal = service.withdraw(owner, null);
+        OwnerPayoutService.Withdrawal withdrawal = service.withdraw(owner, null);
 
         assertThat(withdrawal.amount()).isEqualTo(300_000);
         assertThat(withdrawal.status()).isEqualTo(SettlementStatus.PAID);
@@ -184,10 +187,10 @@ class OwnerPayoutServiceImplTests {
         UUID settlementId = UUID.randomUUID();
         Payout[] payout = new Payout[1];
         Settlement[] settlement = withdrawalSetup(settlementId, payout);
-        when(payoutProviderPort.create(any())).thenThrow(new iuh.fit.paymentservice.application.exception.PaymentProviderException(
+        when(payoutProviderPort.create(any())).thenThrow(new PaymentProviderException(
                 "PAYOS_PAYOUT_ERROR", "payOS không thể xác minh hoặc tạo giao dịch hoàn tiền"));
 
-        var withdrawal = service.withdraw(owner, null);
+        OwnerPayoutService.Withdrawal withdrawal = service.withdraw(owner, null);
 
         assertThat(withdrawal.status()).isEqualTo(SettlementStatus.PROCESSING);
         assertThat(settlement[0].getStatus()).isEqualTo(SettlementStatus.PROCESSING);
@@ -201,7 +204,7 @@ class OwnerPayoutServiceImplTests {
         UUID settlementId = UUID.randomUUID();
         Payout[] payout = new Payout[1];
         Settlement[] settlement = withdrawalSetup(settlementId, payout);
-        when(payoutProviderPort.create(any())).thenThrow(new iuh.fit.paymentservice.application.exception.PaymentProviderException(
+        when(payoutProviderPort.create(any())).thenThrow(new PaymentProviderException(
                 "PAYOS_PAYOUT_INVALID_TO_ACCOUNT_NUMBER", "Không tìm thấy tài khoản nhận chi"));
 
         service.withdraw(owner, null);
@@ -213,7 +216,7 @@ class OwnerPayoutServiceImplTests {
     private Payout uncertainPayout(UUID settlementId, Settlement settlement, LocalDateTime requestedAt) {
         Payout payout = Payout.builder().payoutId(UUID.randomUUID()).settlementId(settlementId)
                 .referenceId("settlement-" + settlementId).status(PayoutStatus.PENDING).requestedAt(requestedAt).build();
-        when(payoutRepository.findByStatuses(anyCollection())).thenReturn(java.util.List.of(payout));
+        when(payoutRepository.findByStatuses(anyCollection())).thenReturn(List.of(payout));
         when(payoutRepository.findByIdForUpdate(payout.getPayoutId())).thenReturn(Optional.of(payout));
         when(settlementRepository.findByIdForUpdate(settlementId)).thenReturn(Optional.of(settlement));
         return payout;
